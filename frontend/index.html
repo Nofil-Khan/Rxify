@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Basic App</title>
+  </head>
+  <body>
+    <main>
+      <h1>Welcome</h1>
+      <p>This is a simple API endpoint for image upload and extraction.</p>
+
+      <form id="uploadForm">
+        <label for="file">Select image:</label>
+        <input type="file" id="file" name="file" accept="image/*" required />
+        <button type="submit">Upload & Extract</button>
+      </form>
+
+      <section id="result" aria-live="polite" style="margin-top:1rem">
+        <h2>Result</h2>
+        <pre id="jsonOutput">No result yet.</pre>
+      </section>
+
+      <script>
+        const form = document.getElementById('uploadForm');
+        const output = document.getElementById('jsonOutput');
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fileInput = document.getElementById('file');
+          if (!fileInput.files.length) return;
+
+          const fd = new FormData();
+          fd.append('file', fileInput.files[0]);
+
+          output.textContent = 'Uploading...';
+
+          try {
+            const resp = await fetch('/api/upload', { method: 'POST', body: fd });
+            if (!resp.ok) {
+              const txt = await resp.text();
+              output.textContent = `Error: ${resp.status} - ${txt}`;
+              return;
+            }
+            const data = await resp.json();
+            output.textContent = JSON.stringify(data, null, 2);
+          } catch (err) {
+            output.textContent = 'Request failed: ' + err;
+          }
+        });
+      </script>
+    </main>
+  </body>
+</html>
