@@ -62,8 +62,12 @@ def parse_prescription(record: dict) -> dict:
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     json_path = Path(__file__).parent.parent / "data" / "json" / "prescription_data.json"
-    with open(json_path, "r") as f:
-        raw_data: list[dict] = json.load(f)
+    try:
+        with open(json_path, "r") as f:
+            raw_data: list[dict] = json.load(f)
+    except FileNotFoundError:
+        print(f"[WARNING] Input JSON not found at {json_path}. Please place your prescription data there.")
+        return
 
     print(f"Total records: {len(raw_data)}\n")
 
@@ -92,35 +96,38 @@ def main():
 
 
 
-try:
-    med_json_path = Path(__file__).parent.parent / "data" / "Medication_data.json"
-    with open(med_json_path, "r") as f:
-        data = json.load(f)
-except FileNotFoundError:
-    data = {}
-
-
-
-user_id = 1
-
-for name, (dosage, frequency) in data.items():
-    cursor.execute("""
-        INSERT INTO medicines (user_id, name, dosage, frequency)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, name, dosage, frequency))
-
-cursor.execute("""
-    SELECT name, dosage, frequency 
-    FROM medicines 
-    WHERE user_id = ?
-""", (1,))   # ← get medicines for user with id=1
-
-rows = cursor.fetchall()
-for row in rows:
-    print(row)
-    
-conn.commit()
-
-
 if __name__ == "__main__":
     main()
+
+    # Database integration/debugging (only runs if script is executed directly)
+    try:
+        med_json_path = Path(__file__).parent.parent / "data" / "Medication_data.json"
+        with open(med_json_path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = {}
+
+    user_id = 1
+
+    try:
+        # Note: Medication_data.json is parsed as a list of dicts, but if it is dict:
+        if isinstance(data, dict):
+            for name, (dosage, frequency) in data.items():
+                cursor.execute("""
+                    INSERT INTO medicines (user_id, name, dosage, frequency)
+                    VALUES (?, ?, ?, ?)
+                """, (user_id, name, dosage, frequency))
+
+        cursor.execute("""
+            SELECT name, dosage, frequency 
+            FROM medicines 
+            WHERE user_id = ?
+        """, (1,))   # ← get medicines for user with id=1
+
+        rows = cursor.fetchall()
+        for row in rows:
+            print(row)
+            
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        print(f"Skipping medicines DB debugging (table/schema mismatch): {e}")

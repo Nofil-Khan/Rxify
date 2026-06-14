@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from routers import auth, upload
+from routers import Medicine_info, auth, upload
 
 app = FastAPI(
     title="Fake Doctor Minimal API",
@@ -27,7 +27,7 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
 app.include_router(upload.router)
-
+app.include_router(Medicine_info.router)  # Include the medicine_info router
 
 # ── Static / health ───────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

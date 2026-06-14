@@ -22,6 +22,7 @@ DEFAULT_MODEL = "gemini-3-flash-preview"
 
 EXTRACTION_PROMPT = """
 You are a medical prescription OCR system. Extract all data from this prescription image.
+AND DO IT FAST
 
 Return ONLY a valid JSON object (no markdown, no explanation) with these fields:
 {
