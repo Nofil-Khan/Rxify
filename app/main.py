@@ -4,13 +4,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from routers import Medicine_info, auth, upload
+from database.user_database import migrate_add_role_column
+from routers import Medicine_info, auth, upload, doctor
 
 app = FastAPI(
-    title="Fake Doctor Minimal API",
-    description="OCR BACKEND ENDPOINT",
-    version="0.1.0",
+    title="MediLedger API",
+    description="Prescription OCR backend with patient and doctor roles.",
+    version="0.2.0",
 )
+
+# ── Run idempotent DB migrations on startup ───────────────────────────────────
+migrate_add_role_column()
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,7 +31,8 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
 app.include_router(upload.router)
-app.include_router(Medicine_info.router)  # Include the medicine_info router
+app.include_router(Medicine_info.router)
+app.include_router(doctor.router)
 
 # ── Static / health ───────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)
@@ -38,4 +43,4 @@ def serve_index():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "Minimal Gemini API"}
+    return {"status": "ok", "service": "MediLedger API", "version": "0.2.0"}
