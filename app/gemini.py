@@ -17,7 +17,7 @@ import json
 import re
 from typing import Any, Dict
 
-API_ENV_VARS = ("GEMINI_API_KEY", "NAMEOFYOURAPIKEY")
+API_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
 DEFAULT_MODEL = "gemini-3-flash-preview"
 
 EXTRACTION_PROMPT = """
