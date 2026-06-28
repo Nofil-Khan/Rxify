@@ -1,0 +1,17 @@
+# Rxify — Python dependencies
+# Install: pip install -r requirements.txt
+
+fastapi==0.115.0
+uvicorn==0.30.6
+python-multipart==0.0.12   # required for form/file uploads
+
+# Auth
+PyJWT==2.13.0
+bcrypt==5.0.0
+
+# AI / OCR
+google-genai==2.6.0
+
+# Config & validation
+python-dotenv==1.0.1
+pydantic==2.12.5
