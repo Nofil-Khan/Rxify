@@ -48,7 +48,9 @@ env.bak/
 *.sqlite3
 
 # ── Uploaded user data ────────────────────────────────────────────────────────
-data/uploads/
+# Ignore image files but keep the directory tracked via .gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
 
 # ── Jupyter Notebooks ─────────────────────────────────────────────────────────
 .ipynb_checkpoints/
