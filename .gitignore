@@ -1,0 +1,89 @@
+# =============================================================================
+# Rxify — .gitignore
+# =============================================================================
+
+# ── Secrets & Environment ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.secret
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+.installed.cfg
+lib/
+lib64/
+MANIFEST
+
+# ── Virtual Environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+.env.bak/
+env.bak/
+
+# ── Conda ─────────────────────────────────────────────────────────────────────
+.conda/
+
+# ── Database files ────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Uploaded user data ────────────────────────────────────────────────────────
+data/uploads/
+
+# ── Jupyter Notebooks ─────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── IDEs & Editors ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Testing & Coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ── Type Checkers ─────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS artifacts ─────────────────────────────────────────────────────────────
+.DS_Store
+desktop.ini
