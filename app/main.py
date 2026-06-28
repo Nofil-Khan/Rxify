@@ -8,7 +8,7 @@ from database.user_database import run_migrations
 from routers import Medicine_info, auth, upload, doctor, patient_requests
 
 app = FastAPI(
-    title="MediLedger API",
+    title="Rxify API",
     description="Prescription OCR backend with patient and doctor roles.",
     version="0.3.0",
 )
@@ -44,5 +44,5 @@ def serve_index():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "service": "MediLedger API", "version": "0.3.0"}
+    return {"status": "ok", "service": "Rxify API", "version": "0.3.0"}
 
