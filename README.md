@@ -1,4 +1,4 @@
-﻿# Rxify
+# Rxify
 
 **Rxify** is a prescription OCR and management platform built with FastAPI and Google Gemini Vision.
 
@@ -20,7 +20,7 @@
 
 `ash
 # 1. Clone the repo
-git clone https://github.com/Nofil-Khan/MediLedger.git rxify
+git clone https://github.com/Nofil-Khan/Rxify.git rxify
 cd rxify
 
 # 2. Create conda env (Python 3.12)
