@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from database.user_database import run_migrations
-from routers import Medicine_info, auth, upload, doctor, patient_requests
+from routers import Medicine_info, auth, upload, doctor, patient_requests, share_token
 
 app = FastAPI(
     title="Rxify API",
@@ -34,6 +34,7 @@ app.include_router(upload.router)
 app.include_router(Medicine_info.router)
 app.include_router(doctor.router)
 app.include_router(patient_requests.router)
+app.include_router(share_token.router)
 
 # ── Static / health ───────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

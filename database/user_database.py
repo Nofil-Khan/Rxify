@@ -102,6 +102,20 @@ def run_migrations() -> None:
         """)
         print("[DB] 'patient_doctor_requests' table ensured.")
 
+        # ── 5. Ensure 'patient_share_tokens' table exists ────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS patient_share_tokens (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id  INTEGER NOT NULL REFERENCES users(id),
+                token       TEXT    UNIQUE NOT NULL,
+                label       TEXT,
+                expires_at  TEXT,
+                is_active   INTEGER NOT NULL DEFAULT 1,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        print("[DB] 'patient_share_tokens' table ensured.")
+
 
 # ── Deprecated Individual Migration Wrappers for Backward Compatibility ──────
 
