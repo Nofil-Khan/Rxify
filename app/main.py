@@ -5,12 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from database.user_database import run_migrations
-from routers import Medicine_info, auth, upload, doctor, patient_requests, share_token
+from routers import Medicine_info, auth, upload, doctor, patient_requests, share_token, chat, video_call
 
 app = FastAPI(
     title="Rxify API",
     description="Prescription OCR backend with patient and doctor roles.",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 # ── Run idempotent DB migrations on startup ───────────────────────────────────
@@ -22,6 +22,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -35,6 +37,8 @@ app.include_router(Medicine_info.router)
 app.include_router(doctor.router)
 app.include_router(patient_requests.router)
 app.include_router(share_token.router)
+app.include_router(chat.router)
+app.include_router(video_call.router)
 
 # ── Static / health ───────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)

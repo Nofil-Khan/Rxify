@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserRegister(BaseModel):
@@ -32,3 +32,14 @@ class RespondToRequest(BaseModel):
 class CreateShareToken(BaseModel):
     label: Optional[str] = None
     expires_in_days: Optional[int] = 7  # None = never expires
+
+
+class SendMessage(BaseModel):
+    receiver_id: int
+    body: str = Field(..., min_length=1, max_length=2000)
+
+
+class ScheduleVideoCall(BaseModel):
+    patient_id: int
+    scheduled_at: str  # ISO 8601 datetime, e.g. "2026-07-25T15:00:00"
+    note: Optional[str] = Field(default=None, max_length=500)

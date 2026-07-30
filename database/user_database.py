@@ -116,6 +116,53 @@ def run_migrations() -> None:
         """)
         print("[DB] 'patient_share_tokens' table ensured.")
 
+        # ── 6. Ensure 'messages' table exists ───────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id    INTEGER NOT NULL REFERENCES users(id),
+                receiver_id  INTEGER NOT NULL REFERENCES users(id),
+                body         TEXT    NOT NULL,
+                sent_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                is_read      INTEGER NOT NULL DEFAULT 0,
+                message_type TEXT    NOT NULL DEFAULT 'text',
+                scheduled_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation
+            ON messages (sender_id, receiver_id)
+        """)
+        print("[DB] 'messages' table ensured.")
+
+        # ── 6a. Add message_type / scheduled_at columns if missing (existing DBs) ─
+        cursor.execute("PRAGMA table_info(messages)")
+        msg_columns = [col[1] for col in cursor.fetchall()]
+        if "message_type" not in msg_columns:
+            cursor.execute(
+                "ALTER TABLE messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'text'"
+            )
+            print("[DB] 'message_type' column added to messages table.")
+        if "scheduled_at" not in msg_columns:
+            cursor.execute(
+                "ALTER TABLE messages ADD COLUMN scheduled_at TEXT"
+            )
+            print("[DB] 'scheduled_at' column added to messages table.")
+
+        # ── 7. Ensure 'video_call_sessions' table exists ─────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS video_call_sessions (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_name    TEXT    UNIQUE NOT NULL,
+                doctor_id    INTEGER NOT NULL REFERENCES users(id),
+                patient_id   INTEGER NOT NULL REFERENCES users(id),
+                scheduled_at TEXT    NOT NULL,
+                status       TEXT    NOT NULL DEFAULT 'scheduled',
+                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        print("[DB] 'video_call_sessions' table ensured.")
+
 
 # ── Deprecated Individual Migration Wrappers for Backward Compatibility ──────
 

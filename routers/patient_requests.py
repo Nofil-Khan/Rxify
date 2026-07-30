@@ -87,3 +87,39 @@ def my_assigned_doctor(
     """
     doctor = req_service.get_my_assigned_doctor(current_user["id"])
     return {"doctor": doctor}
+
+
+@router.get("/my-prescriptions")
+def my_prescriptions(
+    current_user: dict = Depends(require_role("patient")),
+):
+    """Return all prescriptions uploaded by this patient.
+
+    **Access:** Patient only.
+    """
+    return {
+        "prescriptions": req_service.get_my_prescriptions(current_user["id"])
+    }
+
+
+@router.get("/prescriptions/{prescription_id}")
+def get_prescription(
+    prescription_id: int,
+    current_user: dict = Depends(require_role("patient")),
+):
+    """Return full detail of a prescription uploaded by this patient.
+
+    Returns 404 if the prescription does not exist or is not owned by this patient.
+
+    **Access:** Patient only.
+    """
+    prescription = req_service.get_my_prescription_detail(
+        patient_id=current_user["id"],
+        prescription_id=prescription_id,
+    )
+    if prescription is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Prescription {prescription_id} not found.",
+        )
+    return prescription

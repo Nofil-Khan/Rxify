@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- LiveKit Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 
   <style>
     :root {
@@ -531,6 +533,104 @@
       background: var(--primary-g); border: 1px solid rgba(59,130,246,0.25);
       border-radius: 50px; padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--primary); font-weight: 600;
     }
+
+    /* ══════════════════ VIDEO CALL ══════════════════ */
+    #videoCallModal {
+      display: none; position: fixed; inset: 0; z-index: 2000;
+      background: rgba(4,8,18,0.97); backdrop-filter: blur(20px);
+      flex-direction: column;
+    }
+    #videoCallModal.open { display: flex; }
+    .vc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .vc-title { font-family: var(--font-h); font-size: 1.1rem; font-weight: 700;
+      display: flex; align-items: center; gap: 0.6rem; }
+    .vc-live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--error);
+      animation: blink 1s ease-in-out infinite;
+    }
+    .vc-grid {
+      flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 0.75rem; padding: 1rem; overflow: hidden;
+    }
+    .vc-tile {
+      background: rgba(13,21,38,0.9); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 1rem; overflow: hidden; position: relative;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 240px;
+    }
+    .vc-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .vc-tile-label {
+      position: absolute; bottom: 0.5rem; left: 0.6rem;
+      background: rgba(0,0,0,0.6); border-radius: 0.35rem;
+      font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.55rem;
+      color: #fff;
+    }
+    .vc-tile-avatar {
+      width: 4rem; height: 4rem; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; color: #fff;
+    }
+    .vc-controls {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; padding: 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .vc-btn {
+      width: 3rem; height: 3rem; border-radius: 50%;
+      border: none; cursor: pointer; font-size: 1.1rem;
+      display: grid; place-items: center;
+      transition: transform 0.15s, opacity 0.2s;
+    }
+    .vc-btn:hover { transform: scale(1.1); }
+    .vc-btn-mute  { background: rgba(255,255,255,0.1); color: #fff; }
+    .vc-btn-cam   { background: rgba(255,255,255,0.1); color: #fff; }
+    .vc-btn-end   { background: var(--error); color: #fff; width: 3.5rem; height: 3.5rem; }
+    .vc-btn-mute.active { background: var(--error-g); color: var(--error); }
+    .vc-btn-cam.active  { background: var(--error-g); color: var(--error); }
+    .vc-status { font-size: 0.8rem; color: var(--muted); text-align: center; padding-bottom: 0.25rem; }
+
+    /* Schedule call form (in sidebar) */
+    .schedule-call-form {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--card-border);
+      display: none;
+    }
+    .schedule-call-form.show { display: block; }
+    .btn-video {
+      background: linear-gradient(135deg, #7c3aed, #3b82f6);
+      border: none; border-radius: 0.4rem; padding: 0.45rem 0.9rem;
+      color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      transition: opacity 0.2s; display: flex; align-items: center; gap: 0.4rem;
+      width: 100%;
+    }
+    .btn-video:hover { opacity: 0.88; }
+
+    /* Video call invite card (in patient view) */
+    .vc-invite-card {
+      background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(59,130,246,0.1));
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 0.75rem; padding: 1rem 1.25rem;
+      margin: 0.5rem 0;
+    }
+    .vc-invite-card .vc-invite-title {
+      font-weight: 700; font-size: 0.9rem;
+      display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;
+    }
+    .vc-invite-card .vc-invite-time {
+      font-size: 0.78rem; color: var(--muted); margin-bottom: 0.6rem;
+    }
+    .btn-join-call {
+      background: linear-gradient(135deg, #7c3aed, #3b82f6);
+      border: none; border-radius: 0.4rem; padding: 0.45rem 1rem;
+      color: #fff; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-join-call:hover { opacity: 0.88; }
   </style>
 </head>
 <body>
@@ -695,6 +795,12 @@
       </div>
       <div class="alert" id="connectAlert" style="margin-top:0.75rem;"></div>
 
+      <!-- Video Call Invites (patient) -->
+      <div style="margin-top:1.5rem;" id="patientVcInvitesSection">
+        <p style="font-size:0.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;">📹 Video Call Invites</p>
+        <div id="patientVcInvites"></div>
+      </div>
+
       <!-- My requests -->
       <div style="margin-top:1.5rem;">
         <p style="font-size:0.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;">My Connection Requests</p>
@@ -779,7 +885,23 @@
             <div class="empty" style="padding:2rem 1rem;font-size:0.82rem;">No patients yet.<br><span style="color:var(--muted);">Patients will appear here after they connect to you.</span></div>
           </div>
         </div>
+
+        <!-- Schedule Call Form (shown when a patient is selected) -->
+        <div class="schedule-call-form" id="scheduleCallForm">
+          <p style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem;">📹 Schedule Video Call</p>
+          <div class="form-group" style="margin-bottom:0.6rem;">
+            <label for="callDateTime" style="font-size:0.75rem;">Date &amp; Time</label>
+            <input type="datetime-local" id="callDateTime" class="form-ctrl" style="font-size:0.82rem;" />
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            <label for="callNote" style="font-size:0.75rem;">Note (optional)</label>
+            <input type="text" id="callNote" class="form-ctrl" placeholder="e.g. Bring your lab results" style="font-size:0.82rem;" />
+          </div>
+          <button class="btn-video" onclick="scheduleCall()">📹 Send Invite</button>
+          <div class="alert" id="callAlert" style="margin-top:0.5rem;font-size:0.78rem;"></div>
+        </div>
       </div>
+    </div>
 
       <!-- Main content -->
       <div class="main-content">
@@ -868,12 +990,40 @@
   <button class="toast-close" onclick="hideToast()">✕</button>
 </div>
 
+<!-- ══════════ VIDEO CALL MODAL ══════════ -->
+<div id="videoCallModal" role="dialog" aria-label="Video Call">
+  <div class="vc-header">
+    <div class="vc-title">
+      <div class="vc-live-dot"></div>
+      📹 <span id="vcRoomLabel">Video Call</span>
+    </div>
+    <div id="vcStatus" class="vc-status">Connecting…</div>
+  </div>
+  <div class="vc-grid" id="vcGrid">
+    <!-- Local tile -->
+    <div class="vc-tile" id="vcLocalTile">
+      <div class="vc-tile-avatar" id="vcLocalAvatar">👤</div>
+      <span class="vc-tile-label" id="vcLocalLabel">You</span>
+    </div>
+  </div>
+  <div class="vc-controls">
+    <button class="vc-btn vc-btn-mute" id="vcMuteBtn" title="Toggle Microphone" onclick="toggleMic()">🎤</button>
+    <button class="vc-btn vc-btn-cam"  id="vcCamBtn"  title="Toggle Camera"    onclick="toggleCam()">📷</button>
+    <button class="vc-btn vc-btn-end"               title="End Call"          onclick="endCall()">📵</button>
+  </div>
+</div>
+
 <!-- ═══════════════════════ SCRIPT ═══════════════════════ -->
 <script>
   /* ── State ── */
   let AUTH = { token: null, role: null, user: null, userId: null };
   let _selectedPatientId = null;   // doctor sidebar selection
   let _lookedUpDoctor = null;      // patient doctor lookup
+
+  /* ── LiveKit state ── */
+  let _lkRoom = null;              // active LiveKit Room instance
+  let _micMuted = false;
+  let _camOff = false;
 
   /* ── Boot ── */
   window.addEventListener('DOMContentLoaded', () => {
@@ -1274,9 +1424,45 @@
     document.getElementById('rxDetailCard').classList.remove('show');
     const title = patientId ? `${name}'s Prescriptions` : 'All Assigned Patients';
     document.getElementById('rxTableTitle').textContent = title;
+    // Show/hide schedule call form
+    const form = document.getElementById('scheduleCallForm');
+    form.classList.toggle('show', !!patientId);
+    // Pre-fill datetime to now + 30 min
+    if (patientId) {
+      const dt = new Date(Date.now() + 30 * 60000);
+      dt.setSeconds(0, 0);
+      document.getElementById('callDateTime').value = dt.toISOString().slice(0, 16);
+    }
     // Refresh sidebar active state
     loadDoctorPatients();
     loadDoctorPrescriptions();
+  }
+
+  /* ── Schedule video call (doctor) ── */
+  async function scheduleCall() {
+    if (!_selectedPatientId) return;
+    const al  = document.getElementById('callAlert');
+    const dt  = document.getElementById('callDateTime').value;
+    const note = document.getElementById('callNote').value.trim();
+    al.className = 'alert';
+    if (!dt) { showEl(al,'alert alert-err show','Please pick a date & time.'); return; }
+    try {
+      const r = await apiFetch('/api/video-call/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id:   _selectedPatientId,
+          scheduled_at: dt + ':00',
+          note:         note || null,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showEl(al,'alert alert-err show', d.detail || 'Failed to schedule call.'); return; }
+      showEl(al,'alert alert-ok show','✓ Invite sent! Room: ' + d.room_name);
+      document.getElementById('callNote').value = '';
+      // Offer the doctor to join immediately
+      setTimeout(() => joinVideoCall(d.room_name), 600);
+    } catch(err) { showEl(al,'alert alert-err show','Error: '+err.message); }
   }
 
   /* ── Prescriptions table ── */
@@ -1524,6 +1710,188 @@
     document.getElementById('bgToast').classList.remove('show');
     clearTimeout(_toastTimer);
   }
+
+  /* ══════════════════════════════════════════════════════
+     VIDEO CALL — LiveKit integration
+  ══════════════════════════════════════════════════════ */
+
+  async function joinVideoCall(roomName) {
+    if (_lkRoom) { console.warn('Already in a call'); return; }
+
+    // 1. Fetch token from backend
+    let tokenData;
+    try {
+      const r = await apiFetch(`/api/video-call/token/${roomName}`);
+      if (!r.ok) {
+        const d = await r.json();
+        alert('Could not join call: ' + (d.detail || r.status));
+        return;
+      }
+      tokenData = await r.json();
+    } catch(err) { alert('Network error: ' + err.message); return; }
+
+    // 2. Open modal
+    document.getElementById('vcRoomLabel').textContent = roomName;
+    document.getElementById('vcStatus').textContent = 'Connecting…';
+    document.getElementById('videoCallModal').classList.add('open');
+
+    // 3. Create and connect LiveKit room
+    const { Room, RoomEvent } = LivekitClient;
+    _lkRoom = new Room({ adaptiveStream: true, dynacast: true });
+
+    _lkRoom.on(RoomEvent.Connected, () => {
+      document.getElementById('vcStatus').textContent = '🟢 Connected';
+    });
+
+    _lkRoom.on(RoomEvent.Disconnected, () => {
+      document.getElementById('vcStatus').textContent = 'Call ended';
+      closeVideoCall();
+    });
+
+    _lkRoom.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      if (track.kind !== 'video' && track.kind !== 'audio') return;
+      let tile = document.getElementById(`vc-tile-${participant.identity}`);
+      if (!tile) {
+        tile = document.createElement('div');
+        tile.className = 'vc-tile';
+        tile.id = `vc-tile-${participant.identity}`;
+        const label = document.createElement('span');
+        label.className = 'vc-tile-label';
+        label.textContent = participant.name || participant.identity;
+        tile.appendChild(label);
+        document.getElementById('vcGrid').appendChild(tile);
+      }
+      // Remove placeholder avatar if present
+      const av = tile.querySelector('.vc-tile-avatar');
+      if (av) av.remove();
+      const el = track.attach();
+      if (track.kind === 'video') {
+        el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      }
+      tile.insertBefore(el, tile.querySelector('.vc-tile-label'));
+    });
+
+    _lkRoom.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+      track.detach();
+      const tile = document.getElementById(`vc-tile-${participant.identity}`);
+      if (tile) tile.remove();
+    });
+
+    _lkRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+      document.getElementById('vcStatus').textContent =
+        `🟢 Connected · ${_lkRoom.remoteParticipants.size + 1} participant(s)`;
+    });
+
+    try {
+      await _lkRoom.connect(tokenData.livekit_url, tokenData.token);
+      // Publish local camera + mic
+      await _lkRoom.localParticipant.enableCameraAndMicrophone();
+
+      // Attach local video to the local tile
+      const localVid = document.createElement('video');
+      localVid.autoplay = true; localVid.muted = true; localVid.playsInline = true;
+      localVid.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);';
+      const localPubs = _lkRoom.localParticipant.getTrackPublications();
+      for (const pub of localPubs.values()) {
+        if (pub.track && pub.kind === 'video') {
+          pub.track.attach(localVid);
+          break;
+        }
+      }
+      const localTile = document.getElementById('vcLocalTile');
+      const av = localTile.querySelector('.vc-tile-avatar');
+      if (av) av.remove();
+      localTile.insertBefore(localVid, localTile.querySelector('.vc-tile-label'));
+      document.getElementById('vcLocalLabel').textContent = AUTH.user + ' (You)';
+    } catch(err) {
+      alert('Failed to connect to call: ' + err.message);
+      closeVideoCall();
+    }
+  }
+
+  async function toggleMic() {
+    if (!_lkRoom) return;
+    _micMuted = !_micMuted;
+    await _lkRoom.localParticipant.setMicrophoneEnabled(!_micMuted);
+    const btn = document.getElementById('vcMuteBtn');
+    btn.textContent = _micMuted ? '🔇' : '🎤';
+    btn.classList.toggle('active', _micMuted);
+  }
+
+  async function toggleCam() {
+    if (!_lkRoom) return;
+    _camOff = !_camOff;
+    await _lkRoom.localParticipant.setCameraEnabled(!_camOff);
+    const btn = document.getElementById('vcCamBtn');
+    btn.textContent = _camOff ? '🚫' : '📷';
+    btn.classList.toggle('active', _camOff);
+  }
+
+  function endCall() {
+    if (_lkRoom) { _lkRoom.disconnect(); }
+    closeVideoCall();
+  }
+
+  function closeVideoCall() {
+    _lkRoom = null;
+    _micMuted = false; _camOff = false;
+    document.getElementById('vcMuteBtn').textContent = '🎤';
+    document.getElementById('vcCamBtn').textContent  = '📷';
+    document.getElementById('vcMuteBtn').classList.remove('active');
+    document.getElementById('vcCamBtn').classList.remove('active');
+    // Clear remote tiles (keep local)
+    const grid = document.getElementById('vcGrid');
+    [...grid.querySelectorAll('.vc-tile:not(#vcLocalTile)')].forEach(t => t.remove());
+    // Reset local tile
+    const localTile = document.getElementById('vcLocalTile');
+    [...localTile.querySelectorAll('video')].forEach(v => v.remove());
+    const av = document.createElement('div');
+    av.className = 'vc-tile-avatar'; av.id = 'vcLocalAvatar'; av.textContent = '👤';
+    localTile.insertBefore(av, localTile.querySelector('.vc-tile-label'));
+    document.getElementById('videoCallModal').classList.remove('open');
+  }
+
+  /* ── Patient: poll for video call invites in their doctor conversation ── */
+  function renderVideoCallInvite(msg) {
+    const parts = msg.body.split('||');
+    const roomName = parts[0].trim();
+    const note     = parts[1] ? parts[1].trim() : null;
+    const time     = msg.scheduled_at
+      ? new Date(msg.scheduled_at).toLocaleString('en-GB', { dateStyle:'medium', timeStyle:'short' })
+      : 'Scheduled time not set';
+    return `
+      <div class="vc-invite-card">
+        <div class="vc-invite-title">📹 Video Call Invite</div>
+        <div class="vc-invite-time">🕐 ${time}${note ? '<br>💬 ' + note : ''}</div>
+        <button class="btn-join-call" onclick="joinVideoCall('${roomName}')">Join Call</button>
+      </div>`;
+  }
+
+  /* Extend existing apiFetch to expose video invite rendering for polling.
+     If the user is a patient, we check for unread messages that include a video_call invite. */
+  let _vcPollInterval = null;
+  function startPatientVcPoll(doctorId) {
+    stopPatientVcPoll();
+    _vcPollInterval = setInterval(() => checkPatientInvites(doctorId), 8000);
+    checkPatientInvites(doctorId);
+  }
+  function stopPatientVcPoll() {
+    if (_vcPollInterval) { clearInterval(_vcPollInterval); _vcPollInterval = null; }
+  }
+
+  async function checkPatientInvites(doctorId) {
+    try {
+      const r = await apiFetch(`/api/chat/conversation/${doctorId}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const invites = (d.messages || []).filter(m => m.message_type === 'video_call');
+      const container = document.getElementById('patientVcInvites');
+      if (!container) return;
+      if (!invites.length) { container.innerHTML = ''; return; }
+      container.innerHTML = invites.map(renderVideoCallInvite).join('');
+    } catch { /* silent */ }
+  }
+
 </script>
 </body>
 </html>

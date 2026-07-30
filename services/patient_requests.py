@@ -132,3 +132,85 @@ def get_my_assigned_doctor(patient_id: int) -> Optional[Dict[str, Any]]:
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def get_my_prescriptions(patient_id: int) -> List[Dict[str, Any]]:
+    """Return all prescriptions uploaded by this patient."""
+    with db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id,
+                doctor_name,
+                clinic_name,
+                patient_name,
+                patient_age,
+                diagnosis,
+                issue_date,
+                follow_up_date
+            FROM prescriptions
+            WHERE user_id = ?
+            ORDER BY issue_date DESC
+            """,
+            (patient_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_my_prescription_detail(patient_id: int, prescription_id: int) -> Optional[Dict[str, Any]]:
+    """Return full detail of a prescription owned by this patient."""
+    with db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+
+        # ── 1. Verify ownership ────────────────────────────────────────────────
+        cursor.execute(
+            """
+            SELECT id FROM prescriptions
+            WHERE id = ? AND user_id = ?
+            """,
+            (prescription_id, patient_id),
+        )
+        if cursor.fetchone() is None:
+            return None  # not found or not owned by this patient
+
+        # ── 2. Fetch prescription header ───────────────────────────────────────
+        cursor.execute(
+            """
+            SELECT
+                id,
+                patient_name,
+                patient_age,
+                patient_gender,
+                doctor_name,
+                clinic_name,
+                clinic_address,
+                clinic_phone,
+                diagnosis,
+                issue_date,
+                follow_up_date,
+                notes,
+                raw_text
+            FROM prescriptions
+            WHERE id = ?
+            """,
+            (prescription_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        prescription = dict(row)
+
+        # ── 3. Fetch medications ──────────────────────────────────────────────
+        cursor.execute(
+            """
+            SELECT id, name, dosage, frequency, duration, instructions, date
+            FROM prescription_medications
+            WHERE prescription_id = ?
+            ORDER BY id
+            """,
+            (prescription_id,),
+        )
+        prescription["medications"] = [dict(r) for r in cursor.fetchall()]
+        return prescription

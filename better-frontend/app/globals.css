@@ -1,0 +1,141 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-teal: var(--teal);
+  --color-blue: var(--blue);
+  --font-sans: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), 'Geist Mono', monospace;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  color-scheme: dark;
+  --background: #04141f;
+  --foreground: #dff8ff;
+  --card: #061c2b;
+  --card-foreground: #e2f9ff;
+  --popover: #061c2b;
+  --popover-foreground: #dff8ff;
+  --primary: #22d3ee;
+  --primary-foreground: #021825;
+  --secondary: #0b2d42;
+  --secondary-foreground: #c7f2ff;
+  --muted: #081923;
+  --muted-foreground: #8ee7ff;
+  --accent: #7dd3fc;
+  --accent-foreground: #021825;
+  --destructive: #fb7185;
+  --border: rgba(148, 216, 255, 0.16);
+  --input: rgba(148, 216, 255, 0.08);
+  --ring: #7dd3fc;
+  --teal: #2dd4bf;
+  --blue: #38bdf8;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply bg-background;
+  }
+  body {
+    /* background lives on <html> only — an opaque body background would
+       paint over the fixed negative-z 3D canvas */
+    @apply bg-transparent text-foreground font-sans;
+  }
+  ::selection {
+    background: rgba(13, 148, 136, 0.22);
+  }
+}
+
+/* Hairline rule — the only separation device we use */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(33, 30, 25, 0.18) 12%,
+    rgba(33, 30, 25, 0.18) 88%,
+    transparent
+  );
+}
+
+/* Gradient text accent */
+.gradient-ink {
+  background: linear-gradient(100deg, var(--teal), var(--blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Gradient CTA */
+.gradient-cta {
+  background: linear-gradient(100deg, var(--teal), #1477d4);
+  color: #f5f0e8;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.gradient-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px -8px rgba(13, 148, 136, 0.45);
+}
+.gradient-cta:active {
+  transform: translateY(0);
+}
+
+/* Animated link underline */
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.link-underline:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-cta,
+  .link-underline::after {
+    transition: none;
+  }
+}
