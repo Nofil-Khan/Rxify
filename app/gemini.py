@@ -28,8 +28,6 @@ Return ONLY a valid JSON object (no markdown, no explanation) with these fields:
 {
   "doctor_name": "string or null",
   "clinic_name": "string or null",
-  "clinic_address": "string or null",
-  "clinic_phone": "string or null",
   "patient_name": "string or null",
   "patient_age": "string or null",
   "patient_gender": "string or null",
@@ -40,7 +38,7 @@ Return ONLY a valid JSON object (no markdown, no explanation) with these fields:
     {
       "name": "string",
       "dosage": "string or null",
-      "frequency": "string or null",
+      "frequency": "string or null(give it in normal english)",
       "duration": "string or null (e.g. '5 days', '1 month' - try to infer from quantity/dosage if not explicit)",
       "instructions": "string or null"
     }

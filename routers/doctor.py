@@ -3,6 +3,10 @@
 All routes are protected by `require_role("doctor")`.
 All prescription queries are scoped to the doctor's assigned patients only —
 a doctor cannot see any data for patients they are not connected to.
+
+NOTE: current_user["doctor_id"] is the doctor.doctor_id (profile row),
+      current_user["id"]        is the users.user_id.
+All service functions use doctor_id.
 """
 
 from __future__ import annotations
@@ -12,10 +16,21 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.security import require_role
-from models.schemas import DoctorProfileUpdate, RespondToRequest
+from models.doctor import DoctorProfileUpdate, RespondToRequest
 from services import doctor as doctor_service
 
 router = APIRouter(prefix="/api/doctor", tags=["doctor"])
+
+
+def _doctor_id(current_user: dict) -> int:
+    """Extract doctor_id from the current user token dict."""
+    did = current_user.get("doctor_id")
+    if not did:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No doctor profile found for this account.",
+        )
+    return did
 
 
 @router.get("/stats")
@@ -29,7 +44,7 @@ def get_stats(
 
     **Access:** Doctor only.
     """
-    return doctor_service.get_doctor_stats(current_user["id"])
+    return doctor_service.get_doctor_stats(_doctor_id(current_user))
 
 
 @router.get("/my-patients")
@@ -43,14 +58,14 @@ def list_my_patients(
 
     **Access:** Doctor only.
     """
-    return {"patients": doctor_service.get_my_patients(current_user["id"])}
+    return {"patients": doctor_service.get_my_patients(_doctor_id(current_user))}
 
 
 @router.get("/prescriptions")
 def list_prescriptions(
     search: Optional[str] = Query(
         default=None,
-        description="Optional filter. Case-insensitive partial match against patient_name, diagnosis, doctor_name, or clinic_name.",
+        description="Optional filter. Case-insensitive partial match against patient_name, diagnosis, or clinic_name.",
     ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -63,7 +78,7 @@ def list_prescriptions(
     **Access:** Doctor only.
     """
     records = doctor_service.get_my_prescriptions(
-        doctor_id=current_user["id"],
+        doctor_id=_doctor_id(current_user),
         search=search,
         limit=limit,
         offset=offset,
@@ -89,7 +104,7 @@ def get_prescription(
     **Access:** Doctor only.
     """
     detail = doctor_service.get_my_prescription_detail(
-        doctor_id=current_user["id"],
+        doctor_id=_doctor_id(current_user),
         prescription_id=prescription_id,
     )
     if detail is None:
@@ -112,7 +127,7 @@ def get_patient_history(
     **Access:** Doctor only.
     """
     records = doctor_service.get_patient_prescriptions_scoped(
-        doctor_id=current_user["id"],
+        doctor_id=_doctor_id(current_user),
         patient_user_id=user_id,
     )
     if not records:
@@ -131,7 +146,7 @@ def list_pending_requests(
 
     **Access:** Doctor only.
     """
-    return {"requests": doctor_service.get_pending_requests(current_user["id"])}
+    return {"requests": doctor_service.get_pending_requests(_doctor_id(current_user))}
 
 
 @router.post("/requests/{request_id}/respond", status_code=status.HTTP_200_OK)
@@ -148,7 +163,7 @@ def respond_to_request(
     **Access:** Doctor only.
     """
     success = doctor_service.respond_to_request(
-        doctor_id=current_user["id"],
+        doctor_id=_doctor_id(current_user),
         request_id=request_id,
         accept=body.accept,
     )
@@ -174,6 +189,7 @@ def get_profile(
         "username": current_user["username"],
         "display_name": current_user.get("display_name"),
         "specialty": current_user.get("specialty"),
+        "doctor_id": current_user.get("doctor_id"),
     }
 
 
@@ -187,7 +203,7 @@ def update_profile(
     **Access:** Doctor only.
     """
     success = doctor_service.update_doctor_profile(
-        doctor_id=current_user["id"],
+        doctor_id=_doctor_id(current_user),
         display_name=body.display_name,
         specialty=body.specialty,
     )

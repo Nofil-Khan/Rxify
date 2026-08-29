@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from app import gemini as gemini_service
 from app import job_store
 from core.security import get_current_user
-from services import prescription_db
+from services import prescription as prescription_service
 
 router = APIRouter(prefix="/api", tags=["upload"])
 
@@ -33,20 +33,24 @@ def _run_ocr_and_save(
     user_id: int,
 ) -> None:
     """Runs entirely on the server — survives browser tab being closed."""
+    import traceback
+
     try:
         extracted = gemini_service.extract_prescription_data(image_bytes, mime_type)
 
         prescription_id: int | None = None
         try:
-            prescription_id = prescription_db.insert_prescription(extracted, user_id=user_id)
+            prescription_id = prescription_service.insert_prescription(extracted, user_id=user_id)
         except Exception as db_err:
             print(f"[job {job_id}] DB insert failed: {db_err}")
+            traceback.print_exc()
 
         job_store.set_done(job_id, extracted, prescription_id=prescription_id)
         print(f"[job {job_id}] OCR done — prescription_id={prescription_id}")
 
     except Exception as exc:
         error_msg = str(exc)
+        traceback.print_exc()
         job_store.set_error(job_id, error_msg)
         print(f"[job {job_id}] OCR failed: {error_msg}")
 

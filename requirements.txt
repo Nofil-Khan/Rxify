@@ -15,3 +15,7 @@ google-genai==2.6.0
 # Config & validation
 python-dotenv==1.0.1
 pydantic==2.12.5
+email-validator==2.2.0     # required for pydantic EmailStr
+
+# Database — PostgreSQL
+psycopg2-binary==2.9.10

@@ -56,6 +56,10 @@ data/uploads/*
 .ipynb_checkpoints/
 *.ipynb
 
+# ── Node / Dependencies ────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
 # ── IDEs & Editors ────────────────────────────────────────────────────────────
 .vscode/
 .idea/
