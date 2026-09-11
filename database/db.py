@@ -182,6 +182,213 @@ def _ensure_hospital_schema(conn: PgConn) -> None:
             cur.execute("UPDATE patient SET patient_code = NULL WHERE patient_code IS NULL;")
             print("[DB] Hospital Module migration complete.")
 
+    # Always ensure hospital_doctor table exists (idempotent)
+    _ensure_hospital_doctor_schema(conn)
+
+
+def _ensure_dispensary_schema(conn: PgConn) -> None:
+    """Idempotent migration for the dispensary module.
+
+    Handles existing databases that may have the OLD dispensary staff-profile
+    table (with user_id). Migrates to the new design where dispensary is an
+    authenticated org entity (like hospital).
+    """
+    with conn.cursor() as cur:
+        # 0. If old dispensary table exists with user_id column, rename it away.
+        #    We can't simply DROP since dispensary_request may FK to it.
+        #    Safest: rename to _dispensary_staff_legacy if it has user_id column.
+        cur.execute(
+            """
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'dispensary' AND column_name = 'user_id'
+                ) THEN
+                    -- Drop FKs that referenced the old table, then rename
+                    ALTER TABLE IF EXISTS dispensary_request
+                        DROP CONSTRAINT IF EXISTS dispensary_request_fulfilled_by_fkey;
+                    ALTER TABLE dispensary RENAME TO _dispensary_staff_legacy;
+                END IF;
+            END $$;
+            """
+        )
+
+        # 1. Create new dispensary org table
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dispensary (
+                dispensary_id       SERIAL PRIMARY KEY,
+                hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+                name                TEXT NOT NULL DEFAULT 'Main Dispensary',
+                email               TEXT UNIQUE NOT NULL,
+                password_hash       TEXT NOT NULL,
+                phone               TEXT,
+                location            TEXT,
+                operating_hours     TEXT,
+                avg_prep_minutes    INTEGER NOT NULL DEFAULT 15,
+                status              TEXT NOT NULL DEFAULT 'ACTIVE',
+                created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_hospital_id ON dispensary(hospital_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_email ON dispensary(email);")
+
+        # 2. Add new ENUM values to dispensary_status (idempotent)
+        for val in ('PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'CANCELLED'):
+            cur.execute(
+                f"""
+                DO $$ BEGIN
+                    ALTER TYPE dispensary_status ADD VALUE IF NOT EXISTS '{val}';
+                EXCEPTION WHEN others THEN NULL; END $$;
+                """
+            )
+
+        # 3. Create inventory_txn_type ENUM if not exists
+        cur.execute(
+            """
+            DO $$ BEGIN
+                CREATE TYPE inventory_txn_type AS ENUM (
+                    'STOCK_ADDED', 'STOCK_REMOVED', 'MEDICINE_DISPENSED',
+                    'MEDICINE_RESERVED', 'RESERVATION_CANCELLED',
+                    'EXPIRED', 'DAMAGED', 'STOCK_ADJUSTMENT'
+                );
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+            """
+        )
+
+        # 4. Rebuild inventory_dispensary_stock (now references dispensary, not clinic)
+        #    If old table has clinic_id column, drop it and recreate.
+        cur.execute(
+            """
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'inventory_dispensary_stock' AND column_name = 'clinic_id'
+                ) THEN
+                    DROP TABLE IF EXISTS inventory_dispensary_stock CASCADE;
+                END IF;
+            END $$;
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_dispensary_stock (
+                inventory_id        SERIAL PRIMARY KEY,
+                dispensary_id       INTEGER NOT NULL REFERENCES dispensary(dispensary_id) ON DELETE CASCADE,
+                medicine_id         INTEGER NOT NULL REFERENCES medicine(medicine_id) ON DELETE CASCADE,
+                available_quantity  INTEGER NOT NULL DEFAULT 0 CHECK (available_quantity >= 0),
+                reserved_quantity   INTEGER NOT NULL DEFAULT 0 CHECK (reserved_quantity >= 0),
+                reorder_level       INTEGER NOT NULL DEFAULT 10,
+                unit                TEXT,
+                created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (dispensary_id, medicine_id)
+            );
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_inventory_dispensary_id ON inventory_dispensary_stock(dispensary_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_inventory_medicine_id ON inventory_dispensary_stock(medicine_id);")
+
+        # 5. Rebuild dispensary_request (now per-prescription, not per-medicine)
+        cur.execute(
+            """
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'dispensary_request'
+                    AND column_name = 'prescription_medicine_id'
+                ) THEN
+                    DROP TABLE IF EXISTS dispensary_request CASCADE;
+                END IF;
+            END $$;
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dispensary_request (
+                request_id          SERIAL PRIMARY KEY,
+                prescription_id     INTEGER NOT NULL REFERENCES prescription(prescription_id) ON DELETE CASCADE,
+                dispensary_id       INTEGER NOT NULL REFERENCES dispensary(dispensary_id),
+                patient_id          INTEGER NOT NULL REFERENCES patient(patient_id),
+                status              dispensary_status NOT NULL DEFAULT 'PENDING',
+                estimated_ready_at  TIMESTAMPTZ,
+                ready_at            TIMESTAMPTZ,
+                dispensed_at        TIMESTAMPTZ,
+                notes               TEXT,
+                created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (prescription_id, dispensary_id)
+            );
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_dispensary_id ON dispensary_request(dispensary_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_prescription_id ON dispensary_request(prescription_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_status ON dispensary_request(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_patient_id ON dispensary_request(patient_id);")
+
+        # 6. Create dispensary_request_item
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dispensary_request_item (
+                item_id                     SERIAL PRIMARY KEY,
+                request_id                  INTEGER NOT NULL REFERENCES dispensary_request(request_id) ON DELETE CASCADE,
+                prescription_medicine_id    INTEGER NOT NULL REFERENCES prescription_medicine(prescription_medicine_id),
+                medicine_id                 INTEGER REFERENCES medicine(medicine_id),
+                required_quantity           INTEGER NOT NULL DEFAULT 1,
+                dispensed_quantity          INTEGER,
+                availability_status         TEXT NOT NULL DEFAULT 'CHECKING',
+                reserved                    BOOLEAN NOT NULL DEFAULT FALSE,
+                notes                       TEXT,
+                created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_item_request_id ON dispensary_request_item(request_id);")
+
+        # 7. Create inventory_transaction
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_transaction (
+                txn_id          SERIAL PRIMARY KEY,
+                inventory_id    INTEGER NOT NULL REFERENCES inventory_dispensary_stock(inventory_id),
+                dispensary_id   INTEGER NOT NULL REFERENCES dispensary(dispensary_id),
+                medicine_id     INTEGER NOT NULL REFERENCES medicine(medicine_id),
+                txn_type        inventory_txn_type NOT NULL,
+                quantity        INTEGER NOT NULL CHECK (quantity > 0),
+                reference_id    INTEGER,
+                notes           TEXT,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_inv_txn_dispensary_id ON inventory_transaction(dispensary_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_inv_txn_inventory_id ON inventory_transaction(inventory_id);")
+
+    print("[DB] Dispensary schema ensured.")
+
+
+def _ensure_hospital_doctor_schema(conn: PgConn) -> None:
+    """Create the hospital_doctor affiliation table if it does not yet exist."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hospital_doctor (
+                hospital_doctor_id  SERIAL PRIMARY KEY,
+                hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+                doctor_id           INTEGER NOT NULL REFERENCES doctor(doctor_id)     ON DELETE CASCADE,
+                department          TEXT,
+                is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+                joined_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (hospital_id, doctor_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_hospital_doctor_h ON hospital_doctor(hospital_id);
+            CREATE INDEX IF NOT EXISTS idx_hospital_doctor_d ON hospital_doctor(doctor_id);
+            """
+        )
+
+
 def init_db() -> None:
     """Run the full idempotent schema migration from database/schema.sql if needed."""
     with get_conn() as conn:
@@ -191,6 +398,7 @@ def init_db() -> None:
             if exists:
                 print("[DB] PostgreSQL schema already initialised.")
                 _ensure_hospital_schema(conn)
+                _ensure_dispensary_schema(conn)
                 return
 
     schema_path = Path(__file__).parent / "schema.sql"
@@ -236,6 +444,7 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
                        u.full_name AS display_name,
                        u.status,
                        p.patient_id,
+                       p.patient_code,
                        d.doctor_id,
                        d.specialization AS specialty
                 FROM   users u
@@ -261,6 +470,7 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
                        u.full_name AS display_name,
                        u.status,
                        p.patient_id,
+                       p.patient_code,
                        d.doctor_id,
                        d.specialization AS specialty
                 FROM   users u
@@ -283,10 +493,12 @@ def create_user(
     """Create a new user + matching patient or doctor profile row.
 
     Returns a user dict on success, or None if the email is already taken.
+    Note: DISPENSARY role is no longer supported here — dispensaries are
+    org-level entities that authenticate separately (like hospital).
     """
     pg_role = role.upper()
-    if pg_role not in {"PATIENT", "DOCTOR" , "DISPENSARY"}:
-        raise ValueError(f"Invalid role '{role}'. Must be PATIENT, DOCTOR, or DISPENSARY.")
+    if pg_role not in {"PATIENT", "DOCTOR"}:
+        raise ValueError(f"Invalid role '{role}'. Must be PATIENT or DOCTOR.")
 
     if get_user_by_email(email):
         return None  # email already taken
@@ -315,18 +527,13 @@ def create_user(
                 )
                 user_row["patient_id"] = cur.fetchone()["patient_id"]
                 user_row["doctor_id"] = None
-            elif pg_role == "DOCTOR":
+            else:  # DOCTOR
                 cur.execute(
                     "INSERT INTO doctor (user_id) VALUES (%s) RETURNING doctor_id",
                     (uid,),
                 )
                 user_row["doctor_id"] = cur.fetchone()["doctor_id"]
                 user_row["patient_id"] = None
-            else:
-                cur.execute(
-                    "INSERT INTO inventory_dispensary_stock (user_id) VALUES (%s) RETURNING dispensary_id",
-                    (uid,),
-                )
 
     user_row["id"] = user_row["user_id"]
     user_row["username"] = user_row["email"]

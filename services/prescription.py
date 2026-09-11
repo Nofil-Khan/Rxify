@@ -192,6 +192,7 @@ def insert_prescription(extracted: Dict[str, Any], user_id: int) -> int:
                     INSERT INTO prescription_medicine (
                         prescription_id, name, dosage, frequency, duration, instructions
                     ) VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING prescription_medicine_id
                     """,
                     (
                         prescription_id,
@@ -202,6 +203,35 @@ def insert_prescription(extracted: Dict[str, Any], user_id: int) -> int:
                         med.get("instructions"),
                     ),
                 )
+                pm_id = cur.fetchone()["prescription_medicine_id"]
+
+                # Fuzzy match against the medicine catalog so the dispensary
+                # system can do stock lookups by medicine_id rather than
+                # unreliable free-text matching.
+                cur.execute(
+                    """
+                    SELECT medicine_id FROM medicine
+                    WHERE generic_name ILIKE %s OR brand_name ILIKE %s
+                    ORDER BY
+                        CASE WHEN generic_name ILIKE %s THEN 0 ELSE 1 END
+                    LIMIT 1
+                    """,
+                    (med_name, med_name, med_name),
+                )
+                catalog_row = cur.fetchone()
+                if catalog_row:
+                    cur.execute(
+                        "UPDATE prescription_medicine SET medicine_id = %s"
+                        " WHERE prescription_medicine_id = %s",
+                        (catalog_row["medicine_id"], pm_id),
+                    )
+
+            # Automatically create a dispensary request for this prescription
+            try:
+                from services import dispensary as dispensary_service
+                dispensary_service.create_dispensary_request_for_prescription(prescription_id)
+            except Exception as exc:
+                print(f"[DISPENSARY AUTO-CREATE WARNING] Failed to create request for rx #{prescription_id}: {exc}")
 
             return prescription_id
 

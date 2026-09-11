@@ -39,6 +39,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             "uid": user["id"],
             "patient_id": user.get("patient_id"),
             "doctor_id": user.get("doctor_id"),
+            "dispensary_id": user.get("dispensary_id"),
         }
     )
     return {
@@ -46,7 +47,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "token_type": "bearer",
         "role": user["role"],
         "user_id": user["id"],
+        "display_name": user.get("display_name"),
         "doctor_id": user.get("doctor_id"),
+        "doctor_code": f"RXF-D-{user['doctor_id']}" if user.get("doctor_id") else None,
         "patient_id": user.get("patient_id"),
+        "patient_code": user.get("patient_code"),
+        "dispensary_id": user.get("dispensary_id"),
     }
 

@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { lookupPatient, getPatientPrescriptions, getPatientMedications } from '../../../lib/hospitalApi';
 import type { PatientLookup, Prescription, Medication } from '../../../lib/hospitalApi';
-import { Search, User, ChevronRight, FileText, Pill, Droplets, CalendarDays, X } from 'lucide-react';
+import { Search, User, ChevronRight, FileText, Pill, Droplets, CalendarDays, X, Camera } from 'lucide-react';
 
 type View = 'search' | 'profile' | 'prescriptions' | 'medications';
+
+interface PatientLookupTabProps {
+  onScanClick?: () => void;
+}
 
 function calcAge(dob: string | null) {
   if (!dob) return '—';
@@ -16,7 +20,7 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function PatientLookupTab() {
+export default function PatientLookupTab({ onScanClick }: PatientLookupTabProps = {}) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -96,6 +100,18 @@ export default function PatientLookupTab() {
         <button id="lookup-submit" type="submit" className="hosp-lookup-btn" disabled={loading}>
           {loading ? <span className="hosp-spinner" /> : <><Search size={15} /><span>Lookup</span></>}
         </button>
+        {onScanClick && (
+          <button
+            type="button"
+            className="rx-scan-action-btn"
+            style={{ borderRadius: '8px', padding: '0.65rem 1rem' }}
+            onClick={onScanClick}
+            title="Scan Patient QR Code with Camera"
+          >
+            <Camera size={16} />
+            <span>Scan QR</span>
+          </button>
+        )}
       </form>
 
       {error && <div className="hosp-alert hosp-alert--error" role="alert">{error}</div>}

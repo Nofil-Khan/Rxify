@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Eye, EyeOff, Lock, ArrowRight, Building2, Mail } from 'lucide-react';
 import { hospitalLogin, registerHospital } from '../../lib/hospitalApi';
 import { useHospitalAuthStore } from '../../lib/hospitalAuth';
+import { PortalSwitcher } from '../../components/common/PortalSwitcher';
 
 type Tab = 'login' | 'register';
 
@@ -41,7 +42,7 @@ export default function HospitalAuth() {
     setLError(''); setLLoading(true);
     try {
       const res = await hospitalLogin(lEmail.trim(), lPass);
-      setHospitalAuth(res.access_token, res.hospital_id, res.name);
+      setHospitalAuth(res.access_token, res.hospital_id, res.name, res.hospital_code);
       navigate({ to: '/hospital' });
     } catch (err) {
       setLError(err instanceof Error ? err.message : 'Login failed.');
@@ -63,6 +64,7 @@ export default function HospitalAuth() {
 
   return (
     <div className="hosp-auth">
+      <PortalSwitcher current="hospital" />
       <div className="hosp-auth-paper">
 
         {/* Header plate */}

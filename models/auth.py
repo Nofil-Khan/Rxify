@@ -5,7 +5,7 @@ Used by routers/auth.py for user registration and login.
 
 from pydantic import BaseModel, EmailStr, field_validator
 
-_VALID_ROLES = {"PATIENT", "DOCTOR", "DISPENSARY"}
+_VALID_ROLES = {"PATIENT", "DOCTOR"}
 
 
 class UserRegister(BaseModel):

@@ -159,9 +159,11 @@ def get_conversations(user_id: int) -> List[Dict[str, Any]]:
                 })
 
             conversations.sort(
-                key=lambda c: c["last_message"]["created_at"].isoformat()
-                if c["last_message"]
-                else "",
+                key=lambda c: (
+                    c["last_message"]["created_at"].isoformat()
+                    if c["last_message"] and c["last_message"].get("created_at")
+                    else ""
+                ),
                 reverse=True,
             )
             return conversations

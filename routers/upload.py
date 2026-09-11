@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 
 from app import gemini as gemini_service
 from app import job_store
-from core.security import get_current_user
+from core.security import require_role
 from services import prescription as prescription_service
 
 router = APIRouter(prefix="/api", tags=["upload"])
@@ -22,6 +22,7 @@ _ALLOWED_TYPES = {
 }
 
 _UPLOADS_DIR = Path(__file__).parent.parent / "data" / "uploads"
+_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
 # ── Background worker ──────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ def _run_ocr_and_save(
 async def upload_image(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("PATIENT")),
 ):
     # ── Validate file type ────────────────────────────────────────────────────
     content_type = file.content_type or "image/jpeg"
@@ -69,6 +70,13 @@ async def upload_image(
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
 
     image_bytes = await file.read()
+
+    # ── Enforce file size limit ───────────────────────────────────────────────
+    if len(image_bytes) > _MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is 20 MB (received {len(image_bytes) // (1024*1024)} MB).",
+        )
 
     # ── Save upload locally with a unique filename ────────────────────────────
     _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,10 +116,17 @@ async def upload_image(
 @router.get("/job/{job_id}")
 async def get_job_status(
     job_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_role("PATIENT")),
 ):
     """Poll this endpoint to check OCR progress."""
     job = job_store.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found or already expired.")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Job not found or has expired. "
+                "If the server was restarted while your upload was processing, "
+                "the job is lost — please re-upload your prescription image."
+            ),
+        )
     return job

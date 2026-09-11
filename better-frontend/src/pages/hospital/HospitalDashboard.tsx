@@ -1,24 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Building2, LayoutDashboard, Search, User2, LogOut, Menu, X, ChevronRight } from 'lucide-react';
+import {
+  Building2, LayoutDashboard, Search, User2, LogOut, Menu, X,
+  ChevronRight, Stethoscope, Package, Camera, ShieldCheck
+} from 'lucide-react';
 import { useHospitalAuthStore } from '../../lib/hospitalAuth';
 import HospOverviewTab from './tabs/OverviewTab';
 import PatientLookupTab from './tabs/PatientLookupTab';
 import HospProfileTab from './tabs/ProfileTab';
+import DoctorsTab from './tabs/DoctorsTab';
+import DispensaryTab from './tabs/DispensaryTab';
+import ShareIdModal from '../../components/common/ShareIdModal';
+import QrScannerModal from '../../components/common/QrScannerModal';
 
-export type HospTab = 'overview' | 'lookup' | 'profile';
+export type HospTab = 'overview' | 'lookup' | 'doctors' | 'dispensary' | 'profile';
 
 const NAV: { id: HospTab; label: string; icon: React.ReactNode; desc: string }[] = [
-  { id: 'overview', label: 'Dashboard',      icon: <LayoutDashboard size={18} />, desc: 'Metrics & audit log'  },
-  { id: 'lookup',   label: 'Patient Lookup', icon: <Search size={18} />,          desc: 'QR code & patient ID' },
-  { id: 'profile',  label: 'Institution',    icon: <User2 size={18} />,           desc: 'Hospital profile'     },
+  { id: 'overview',   label: 'Dashboard',      icon: <LayoutDashboard size={18} />, desc: 'Metrics & audit log'    },
+  { id: 'lookup',     label: 'Patient Lookup', icon: <Search size={18} />,          desc: 'QR code & patient ID'   },
+  { id: 'doctors',    label: 'Doctors Roster', icon: <Stethoscope size={18} />,     desc: 'Affiliated physicians'  },
+  { id: 'dispensary', label: 'Dispensaries',   icon: <Package size={18} />,         desc: 'Pharmacy inventory'     },
+  { id: 'profile',    label: 'Institution',    icon: <User2 size={18} />,           desc: 'Hospital profile'       },
 ];
 
 export default function HospitalDashboard() {
-  const { name, clearHospitalAuth, isAuthenticated } = useHospitalAuthStore();
+  const { name, hospitalId, hospitalCode, clearHospitalAuth, isAuthenticated } = useHospitalAuthStore();
   const navigate = useNavigate();
   const [tab, setTab] = useState<HospTab>('overview');
   const [sideOpen, setSideOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate({ to: '/hospital/login' });
@@ -39,6 +50,8 @@ export default function HospitalDashboard() {
   const go = (t: HospTab) => { setTab(t); setSideOpen(false); };
 
   const abbrev = (n: string | null) => n ? n.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() : 'H';
+
+  const hCode = hospitalCode || (hospitalId ? `RXF-H-${hospitalId}` : 'RXF-H-1');
 
   return (
     <div className="hd-shell">
@@ -104,21 +117,75 @@ export default function HospitalDashboard() {
           </div>
         </header>
 
-        {/* Breadcrumb */}
-        <nav className="hd-breadcrumb" aria-label="Breadcrumb">
-          <Building2 size={13} aria-hidden="true" />
-          <span>Hospital</span>
-          <ChevronRight size={12} aria-hidden="true" />
-          <span className="hd-breadcrumb-current">{NAV.find(n => n.id === tab)?.label}</span>
-        </nav>
+        {/* Breadcrumb & Action Bar */}
+        <div className="hd-breadcrumb" aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Building2 size={13} aria-hidden="true" />
+            <span>Hospital</span>
+            <ChevronRight size={12} aria-hidden="true" />
+            <span className="hd-breadcrumb-current">{NAV.find(n => n.id === tab)?.label}</span>
+          </div>
+
+          <div className="rx-top-action-bar">
+            <button
+              id="hospital-share-id-btn"
+              className="rx-id-badge-btn"
+              onClick={() => setShowShareModal(true)}
+              title="View and share Hospital Accreditation ID & QR Code"
+            >
+              <ShieldCheck size={14} />
+              <span>ID: {hCode}</span>
+            </button>
+            <button
+              id="hospital-scan-btn"
+              className="rx-scan-action-btn"
+              onClick={() => setShowScannerModal(true)}
+              title="Scan Patient or Doctor QR Code"
+            >
+              <Camera size={14} />
+              <span>Scan QR / Connect</span>
+            </button>
+          </div>
+        </div>
 
         {/* Content viewport */}
         <div className="hd-viewport" role="region" aria-live="polite">
-          {tab === 'overview' && <HospOverviewTab />}
-          {tab === 'lookup'   && <PatientLookupTab />}
-          {tab === 'profile'  && <HospProfileTab />}
+          {tab === 'overview'   && <HospOverviewTab />}
+          {tab === 'lookup'     && <PatientLookupTab onScanClick={() => setShowScannerModal(true)} />}
+          {tab === 'doctors'    && <DoctorsTab onScanDoctorClick={() => setShowScannerModal(true)} />}
+          {tab === 'dispensary' && <DispensaryTab onScanClick={() => setShowScannerModal(true)} />}
+          {tab === 'profile'    && <HospProfileTab />}
         </div>
       </main>
+
+      {/* Share Hospital ID & QR Modal */}
+      <ShareIdModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        role="hospital"
+        code={hCode}
+        name={name || 'Hospital Administration'}
+        subtitle="Doctors and patients can scan this code to affiliate with this healthcare institution."
+        details={[
+          { label: 'Hospital Code', value: hCode },
+          { label: 'Institution ID', value: String(hospitalId || 1) },
+          { label: 'Network', value: 'Rxify Accredited Hospital Organization' },
+        ]}
+      />
+
+      {/* Universal QR Scanner Modal */}
+      <QrScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        role="hospital"
+        onSuccessAction={(actionType, payload) => {
+          if (actionType === 'hospital_view_patient') {
+            go('lookup');
+          } else if (actionType === 'hospital_affiliated_doctor') {
+            go('doctors');
+          }
+        }}
+      />
     </div>
   );
 }

@@ -118,18 +118,27 @@ def get_patient_stats(patient_user_id: int) -> Dict[str, Any]:
             cur.execute(
                 """
                 SELECT
+                    pt.patient_id,
+                    pt.patient_code,
+                    u.full_name,
+                    u.email,
                     (SELECT COUNT(*) FROM prescription WHERE patient_id = pt.patient_id) AS rx_count,
                     (SELECT COUNT(*) FROM patient_doctor WHERE patient_id = pt.patient_id AND status = 'pending') AS pending_requests,
                     (SELECT COUNT(*) FROM patient_share_tokens WHERE patient_id = pt.patient_id AND is_active = TRUE AND (expires_at IS NULL OR expires_at > NOW())) AS active_shares
                 FROM patient pt
+                JOIN users u ON u.user_id = pt.user_id
                 WHERE pt.user_id = %s
                 """,
                 (patient_user_id,),
             )
             row = cur.fetchone()
             if row is None:
-                return {"rx_count": 0, "pending_requests": 0, "active_shares": 0}
+                return {"rx_count": 0, "pending_requests": 0, "active_shares": 0, "patient_code": None}
             return {
+                "patient_id": row["patient_id"],
+                "patient_code": row["patient_code"],
+                "full_name": row["full_name"],
+                "email": row["email"],
                 "rx_count": row["rx_count"] or 0,
                 "pending_requests": row["pending_requests"] or 0,
                 "active_shares": row["active_shares"] or 0,
@@ -141,25 +150,27 @@ def get_patient_stats(patient_user_id: int) -> Dict[str, Any]:
 # =============================================================================
 
 def lookup_doctor(doctor_id: int) -> Optional[Dict[str, Any]]:
-    """Look up a doctor by their doctor_id (numeric).
+    """Look up a doctor by their doctor_id (numeric primary key).
 
     Returns user_id, email, full_name, specialization, or None if not found.
-    Accepts either a doctor.doctor_id or users.user_id for convenience.
     """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """
                 SELECT d.doctor_id      AS id,
+                       CONCAT('RXF-D-', d.doctor_id) AS doctor_code,
                        u.user_id,
                        u.email          AS username,
                        u.full_name      AS display_name,
-                       d.specialization AS specialty
+                       d.specialization AS specialty,
+                       d.license_number,
+                       d.experience_years
                 FROM doctor d
                 JOIN users u ON u.user_id = d.user_id
-                WHERE d.doctor_id = %s OR u.user_id = %s
+                WHERE d.doctor_id = %s
                 """,
-                (doctor_id, doctor_id),
+                (doctor_id,),
             )
             row = cur.fetchone()
             return dict(row) if row else None

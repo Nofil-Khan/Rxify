@@ -166,3 +166,122 @@ def get_doctor_clinics(doctor_id: int) -> List[Dict[str, Any]]:
             cur.execute("SELECT clinic_id, name, address, type FROM clinic_hospital ORDER BY name ASC")
             return [dict(r) for r in cur.fetchall()]
 
+
+# ---------------------------------------------------------------------------
+# Doctor-owned slot CRUD
+# ---------------------------------------------------------------------------
+
+def create_slot(
+    doctor_id: int,
+    clinic_id: int,
+    slot_date,
+    start_time,
+    end_time,
+    max_patients: int = 1,
+) -> Dict[str, Any]:
+    """Doctor creates their own appointment slot.
+
+    Returns the created slot dict.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                INSERT INTO appointment_slot (doctor_id, clinic_id, slot_date, start_time, end_time, max_patients)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING slot_id, doctor_id, clinic_id, slot_date, start_time, end_time, max_patients, created_at
+                """,
+                (doctor_id, clinic_id, slot_date, start_time, end_time, max_patients),
+            )
+            row = dict(cur.fetchone())
+            for k in ("slot_date", "start_time", "end_time", "created_at"):
+                if row.get(k):
+                    row[k] = str(row[k])
+            return row
+
+
+def update_doctor_slot(
+    doctor_id: int,
+    slot_id: int,
+    slot_date=None,
+    start_time=None,
+    end_time=None,
+    max_patients: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Doctor partially updates one of their own slots.
+
+    Returns the updated slot dict, or None if not found / not owned.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Ownership check
+            cur.execute(
+                "SELECT slot_id FROM appointment_slot WHERE slot_id = %s AND doctor_id = %s",
+                (slot_id, doctor_id),
+            )
+            if not cur.fetchone():
+                return None
+
+            fields, params = [], []
+            if slot_date is not None:
+                fields.append("slot_date = %s"); params.append(slot_date)
+            if start_time is not None:
+                fields.append("start_time = %s"); params.append(start_time)
+            if end_time is not None:
+                fields.append("end_time = %s"); params.append(end_time)
+            if max_patients is not None:
+                fields.append("max_patients = %s"); params.append(max_patients)
+
+            if not fields:
+                cur.execute(
+                    "SELECT slot_id, doctor_id, clinic_id, slot_date, start_time, end_time, max_patients FROM appointment_slot WHERE slot_id = %s",
+                    (slot_id,),
+                )
+                row = dict(cur.fetchone())
+                for k in ("slot_date", "start_time", "end_time"):
+                    if row.get(k): row[k] = str(row[k])
+                return row
+
+            params.append(slot_id)
+            cur.execute(
+                f"UPDATE appointment_slot SET {', '.join(fields)} WHERE slot_id = %s "
+                "RETURNING slot_id, doctor_id, clinic_id, slot_date, start_time, end_time, max_patients",
+                params,
+            )
+            row = dict(cur.fetchone())
+            for k in ("slot_date", "start_time", "end_time"):
+                if row.get(k): row[k] = str(row[k])
+            return row
+
+
+def delete_doctor_slot(doctor_id: int, slot_id: int) -> bool:
+    """Doctor deletes one of their own slots.
+
+    Blocked if there are active (non-cancelled, non-no-show) bookings.
+    Returns True if deleted, False otherwise.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Ownership check
+            cur.execute(
+                "SELECT slot_id FROM appointment_slot WHERE slot_id = %s AND doctor_id = %s",
+                (slot_id, doctor_id),
+            )
+            if not cur.fetchone():
+                return False
+
+            # Active bookings guard
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM appointment
+                WHERE slot_id = %s AND status NOT IN ('CANCELLED', 'NO_SHOW')
+                """,
+                (slot_id,),
+            )
+            if cur.fetchone()[0] > 0:
+                return False  # Has active bookings, cannot delete
+
+            cur.execute("DELETE FROM appointment_slot WHERE slot_id = %s AND doctor_id = %s", (slot_id, doctor_id))
+            return cur.rowcount > 0
+
+

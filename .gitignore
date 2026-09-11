@@ -2,11 +2,15 @@
 # Rxify — .gitignore
 # =============================================================================
 
-# ── Secrets & Environment ─────────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.secret
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -27,8 +31,10 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 .installed.cfg
-lib/
-lib64/
+/lib/
+/lib64/
+!better-frontend/src/lib/
+!better-frontend/lib/
 MANIFEST
 
 # ── Virtual Environments ──────────────────────────────────────────────────────
@@ -44,6 +50,9 @@ env.bak/
 
 # ── Database files ────────────────────────────────────────────────────────────
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 
@@ -56,9 +65,18 @@ data/uploads/*
 .ipynb_checkpoints/
 *.ipynb
 
-# ── Node / Dependencies ────────────────────────────────────────────────────────
+# ── Node / Dependencies & Bundlers ────────────────────────────────────────────
 node_modules/
 **/node_modules/
+dist/
+**/dist/
+.vite/
+**/.vite/
+.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ── IDEs & Editors ────────────────────────────────────────────────────────────
 .vscode/

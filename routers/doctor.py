@@ -10,15 +10,12 @@ All service functions use doctor_id.
 """
 
 from __future__ import annotations
-
 from typing import Optional
-
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
 from core.security import require_role
 from models.doctor import DoctorProfileUpdate, RespondToRequest
 from services import doctor as doctor_service
-
 router = APIRouter(prefix="/api/doctor", tags=["doctor"])
 
 
@@ -184,12 +181,14 @@ def get_profile(
 
     **Access:** Doctor only.
     """
+    did = _doctor_id(current_user)
     return {
         "id": current_user["id"],
         "username": current_user["username"],
         "display_name": current_user.get("display_name"),
         "specialty": current_user.get("specialty"),
-        "doctor_id": current_user.get("doctor_id"),
+        "doctor_id": did,
+        "doctor_code": f"RXF-D-{did}",
     }
 
 
@@ -213,3 +212,84 @@ def update_profile(
             detail="Failed to update profile.",
         )
     return {"message": "Profile updated successfully."}
+
+
+@router.get("/patient-lookup/{patient_code}")
+def lookup_patient_by_code(
+    patient_code: str,
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """Look up a patient by their public RXF-P-XXXXX code (e.g. from QR scan).
+
+    **Access:** Doctor only.
+    """
+    patient = doctor_service.lookup_patient_by_code_for_doctor(
+        doctor_id=_doctor_id(current_user),
+        patient_code=patient_code,
+    )
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient with code {patient_code} not found.",
+        )
+    return patient
+
+
+@router.post("/connect-patient")
+def connect_patient(
+    body: dict,
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """Connect this doctor with a patient using their public patient_code.
+
+    **Access:** Doctor only.
+    """
+    patient_code = body.get("patient_code")
+    if not patient_code:
+        raise HTTPException(status_code=400, detail="patient_code is required.")
+    res = doctor_service.doctor_connect_patient(
+        doctor_id=_doctor_id(current_user),
+        patient_code=str(patient_code).strip(),
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("message"))
+    return res
+
+
+@router.get("/affiliated-hospitals")
+def get_affiliated_hospitals(
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """List all hospitals this doctor is actively affiliated with.
+
+    **Access:** Doctor only.
+    """
+    from database.db import get_conn
+    import psycopg2.extras
+    did = _doctor_id(current_user)
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT h.hospital_id,
+                       CONCAT('RXF-H-', h.hospital_id) AS hospital_code,
+                       h.name,
+                       h.email,
+                       h.phone,
+                       h.address,
+                       h.city,
+                       h.state,
+                       hd.department,
+                       hd.joined_at
+                FROM hospital_doctor hd
+                JOIN hospital h ON h.hospital_id = hd.hospital_id
+                WHERE hd.doctor_id = %s AND hd.is_active = TRUE
+                ORDER BY hd.joined_at DESC
+                """,
+                (did,),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                if r.get("joined_at"):
+                    r["joined_at"] = str(r["joined_at"])
+            return {"hospitals": rows}

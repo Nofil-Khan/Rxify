@@ -18,7 +18,7 @@
 
 ## Setup
 
-`ash
+```bash
 # 1. Clone the repo
 git clone https://github.com/Nofil-Khan/Rxify.git rxify
 cd rxify
@@ -28,15 +28,21 @@ conda create -n py312 python=3.12
 conda activate py312
 
 # 3. Install dependencies
-pip install fastapi uvicorn python-dotenv pyjwt bcrypt google-genai python-multipart
+pip install fastapi uvicorn python-dotenv pyjwt bcrypt google-genai python-multipart psycopg2-binary
 
-# 4. Configure environment
+# 4. Create PostgreSQL database
+psql -U postgres -c "CREATE DATABASE rxify;"
+
+# 5. Configure environment
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY and SECRET_KEY
+# Edit .env and fill in:
+#   DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/rxify
+#   GEMINI_API_KEY=your_gemini_api_key
+#   SECRET_KEY=your_32+_char_secret
 
-# 5. Run
+# 6. Run (schema is applied automatically on first startup)
 uvicorn app.main:app --reload
-`
+```
 
 The API will be available at http://localhost:8000.  
 Interactive docs: http://localhost:8000/docs

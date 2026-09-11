@@ -6,7 +6,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from core.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
-from database import db as user_database
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
@@ -35,12 +34,16 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         role = payload.get("role")
         patient_id = payload.get("patient_id")
         doctor_id = payload.get("doctor_id")
+        dispensary_id = payload.get("dispensary_id")
 
+        # Reject stale tokens that pre-date the uid/role claims being added.
+        # Re-logging in will issue a current token.
         if uid is None or role is None:
-            user = user_database.get_user_by_email(username)
-            if user is None:
-                raise credentials_exception
-            return user
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your session has expired. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         return {
             "id": uid,
@@ -48,6 +51,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             "role": role,
             "patient_id": patient_id,
             "doctor_id": doctor_id,
+            "dispensary_id": dispensary_id,
         }
     except jwt.InvalidTokenError:
         raise credentials_exception
@@ -127,3 +131,50 @@ def get_current_hospital(token: str = Depends(oauth2_scheme)) -> dict:
 def require_hospital() -> Callable:
     """Dependency that restricts an endpoint to active hospitals only."""
     return get_current_hospital
+
+
+def get_current_dispensary(token: str = Depends(oauth2_scheme)) -> dict:
+    """Validate JWT and return the dispensary dictionary.
+
+    Ensures that ONLY tokens explicitly issued to a dispensary entity
+    are accepted.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate dispensary credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    from services import dispensary as dispensary_service
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        role = payload.get("role")
+        dispensary_id = payload.get("dispensary_id")
+
+        if role != "DISPENSARY" or dispensary_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. This endpoint requires a dispensary account.",
+            )
+
+        dispensary = dispensary_service.get_dispensary_by_id(dispensary_id)
+        if dispensary is None:
+            raise credentials_exception
+
+        if dispensary.get("status") != "ACTIVE":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Dispensary account is suspended or inactive.",
+            )
+
+        return dispensary
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+
+def require_dispensary() -> Callable:
+    """Dependency that restricts an endpoint to active dispensaries only."""
+    return get_current_dispensary
+

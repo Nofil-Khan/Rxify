@@ -1,4 +1,12 @@
-"""Doctor appointment router."""
+"""Doctor appointment router — /api/doctor/appointments/...
+
+Handles:
+  - Viewing the doctor's own appointments (with filtering)
+  - Updating appointment status
+  - Listing associated clinics
+  - Full slot CRUD (doctor manages their own availability)
+    Hospital can ALSO manage slots via /api/hospital/appointments/...
+"""
 
 from __future__ import annotations
 
@@ -7,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from core.security import require_role
+from models.doctor import DoctorCreateSlotRequest, DoctorUpdateSlotRequest
 from services import appointment as appointment_service
 
 router = APIRouter(prefix="/api/doctor/appointments", tags=["doctor-appointments"])
@@ -25,6 +34,10 @@ def _doctor_id(current_user: dict) -> int:
 class StatusUpdateSchema(BaseModel):
     status: str = Field(..., description="BOOKED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW")
 
+
+# =============================================================================
+# Appointment listing + status updates
+# =============================================================================
 
 @router.get("")
 def list_appointments(
@@ -78,3 +91,90 @@ def list_clinics(
     did = _doctor_id(current_user)
     return {"clinics": appointment_service.get_doctor_clinics(did)}
 
+
+# =============================================================================
+# Slot management — doctor manages their own availability
+# Hospital can ALSO manage slots for affiliated doctors via /api/hospital/...
+# =============================================================================
+
+@router.get("/slots")
+def list_my_slots(
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """List all future available slots created by or for this doctor.
+
+    **Access:** Doctor only.
+    """
+    did = _doctor_id(current_user)
+    from services import hospital as hospital_service
+    slots = hospital_service.get_available_slots_for_doctor(doctor_id=did)
+    return {"total": len(slots), "slots": slots}
+
+
+@router.post("/slots", status_code=status.HTTP_201_CREATED)
+def create_slot(
+    body: DoctorCreateSlotRequest,
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """Doctor creates their own appointment slot.
+
+    **Access:** Doctor only.
+    """
+    did = _doctor_id(current_user)
+    slot = appointment_service.create_slot(
+        doctor_id=did,
+        clinic_id=body.clinic_id,
+        slot_date=body.slot_date,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        max_patients=body.max_patients,
+    )
+    return {"message": "Slot created successfully.", "slot": slot}
+
+
+@router.put("/slots/{slot_id}")
+def update_slot(
+    slot_id: int,
+    body: DoctorUpdateSlotRequest,
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """Doctor updates one of their own appointment slots.
+
+    **Access:** Doctor only.
+    """
+    did = _doctor_id(current_user)
+    updated = appointment_service.update_doctor_slot(
+        doctor_id=did,
+        slot_id=slot_id,
+        slot_date=body.slot_date,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        max_patients=body.max_patients,
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Slot not found or does not belong to you.",
+        )
+    return {"message": "Slot updated.", "slot": updated}
+
+
+@router.delete("/slots/{slot_id}", status_code=status.HTTP_200_OK)
+def delete_slot(
+    slot_id: int,
+    current_user: dict = Depends(require_role("doctor")),
+):
+    """Doctor removes one of their own appointment slots.
+
+    Only future slots with no active bookings can be deleted.
+
+    **Access:** Doctor only.
+    """
+    did = _doctor_id(current_user)
+    deleted = appointment_service.delete_doctor_slot(doctor_id=did, slot_id=slot_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Slot not found, not owned by you, or has active bookings.",
+        )
+    return {"message": "Slot deleted successfully."}

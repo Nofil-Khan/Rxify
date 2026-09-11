@@ -13,6 +13,10 @@ import RequestsTab from './tabs/RequestsTab';
 import DoctorMessagesTab from './tabs/MessagesTab';
 import DoctorProfileTab from './tabs/DoctorProfileTab';
 import AppointmentsTab from './tabs/AppointmentsTab';
+import ShareIdModal from '../../components/common/ShareIdModal';
+import QrScannerModal from '../../components/common/QrScannerModal';
+import { Camera, ShieldCheck, Stethoscope as StethIcon } from 'lucide-react';
+import { getDoctorProfile, type DoctorProfile } from '../../lib/doctorApi';
 
 export type DoctorTab = 'overview' | 'patients' | 'appointments' | 'messages' | 'prescriptions' | 'requests' | 'profile';
 
@@ -27,11 +31,28 @@ const NAV_ITEMS: { id: DoctorTab; label: string; icon: React.ReactNode; desc: st
 ];
 
 export default function DoctorDashboard() {
-  const { username, clearAuth } = useAuthStore();
+  const { username, displayName, doctorId, doctorCode, updateProfileData, clearAuth } = useAuthStore();
   const navigate = useNavigate();
   const [tab, setTab]         = useState<DoctorTab>('overview');
   const [dark, setDark]       = useState(() => localStorage.getItem('rxify-theme') === 'dark');
   const [sideOpen, setSideOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+
+  /* ── Sync Doctor Profile ── */
+  useEffect(() => {
+    getDoctorProfile()
+      .then((p: DoctorProfile) => {
+        if (p && p.id) {
+          updateProfileData({
+            doctorId: p.id,
+            doctorCode: p.doctor_code || `RXF-D-${p.id}`,
+            displayName: p.display_name || p.username,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [updateProfileData]);
 
   /* Sync Theme */
   useEffect(() => {
@@ -174,14 +195,37 @@ export default function DoctorDashboard() {
           </button>
         </header>
 
-        {/* Breadcrumb Trail */}
-        <div className="dd-breadcrumb" aria-label="Breadcrumb">
-          <Shield size={14} aria-hidden="true" />
-          <span>Doctor Workspace</span>
-          <ChevronRight size={13} aria-hidden="true" />
-          <span className="dd-breadcrumb-current">
-            {NAV_ITEMS.find((n) => n.id === tab)?.label}
-          </span>
+        {/* Breadcrumb Trail & Action Bar */}
+        <div className="dd-breadcrumb" aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Shield size={14} aria-hidden="true" />
+            <span>Doctor Workspace</span>
+            <ChevronRight size={13} aria-hidden="true" />
+            <span className="dd-breadcrumb-current">
+              {NAV_ITEMS.find((n) => n.id === tab)?.label}
+            </span>
+          </div>
+
+          <div className="rx-top-action-bar">
+            <button
+              id="doctor-share-id-btn"
+              className="rx-id-badge-btn"
+              onClick={() => setShowShareModal(true)}
+              title="View and share your Doctor ID and QR Code"
+            >
+              <ShieldCheck size={14} />
+              <span>ID: {doctorCode || (doctorId ? `RXF-D-${doctorId}` : 'Doctor ID')}</span>
+            </button>
+            <button
+              id="doctor-scan-btn"
+              className="rx-scan-action-btn"
+              onClick={() => setShowScannerModal(true)}
+              title="Scan Patient QR Code to Add to Care Directory"
+            >
+              <Camera size={14} />
+              <span>Scan Patient QR</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab Viewport */}
@@ -194,8 +238,35 @@ export default function DoctorDashboard() {
           {tab === 'requests'      && <RequestsTab />}
           {tab === 'profile'       && <DoctorProfileTab />}
         </div>
-
       </main>
+
+      {/* Share Doctor ID & QR Modal */}
+      <ShareIdModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        role="doctor"
+        code={doctorCode || (doctorId ? `RXF-D-${doctorId}` : 'RXF-D-1')}
+        name={displayName ? `Dr. ${displayName}` : (username ? `Dr. ${username}` : 'Doctor')}
+        subtitle="Patients and hospitals can scan this code to connect with your clinical practice."
+        details={[
+          { label: 'Physician Code', value: doctorCode || `RXF-D-${doctorId || 1}` },
+          { label: 'Doctor ID', value: String(doctorId || 1) },
+          { label: 'Account', value: username || '' },
+          { label: 'Verification', value: 'Active Medical License' },
+        ]}
+      />
+
+      {/* Universal QR Scanner Modal */}
+      <QrScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        role="doctor"
+        onSuccessAction={(actionType) => {
+          if (actionType === 'doctor_connected_patient') {
+            setTab('patients');
+          }
+        }}
+      />
     </div>
   );
 }

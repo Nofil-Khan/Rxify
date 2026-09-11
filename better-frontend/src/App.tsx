@@ -15,6 +15,8 @@ import PatientDashboard from './pages/patient/PatientDashboard';
 import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import HospitalAuth from './pages/hospital/HospitalAuth';
 import HospitalDashboard from './pages/hospital/HospitalDashboard';
+import DispensaryAuth from './pages/dispensary/DispensaryAuth';
+import DispensaryPortal from './pages/dispensary/DispensaryPortal';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -92,6 +94,18 @@ const hospitalDashboardRoute = createRoute({
   component: HospitalDashboard,
 });
 
+const dispensaryLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dispensary/login',
+  component: DispensaryAuth,
+});
+
+const dispensaryPortalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dispensary',
+  component: DispensaryPortal,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -99,6 +113,8 @@ const routeTree = rootRoute.addChildren([
   doctorRoute,
   hospitalLoginRoute,
   hospitalDashboardRoute,
+  dispensaryLoginRoute,
+  dispensaryPortalRoute,
 ]);
 
 const router = createRouter({ routeTree });

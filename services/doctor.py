@@ -328,3 +328,79 @@ def update_doctor_profile(
                     (specialty, doctor_id),
                 )
             return True
+
+
+def lookup_patient_by_code_for_doctor(doctor_id: int, patient_code: str) -> Optional[Dict[str, Any]]:
+    """Look up patient by public patient_code and check relationship with this doctor."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT pt.patient_id,
+                       pt.patient_code,
+                       pt.date_of_birth,
+                       pt.blood_group,
+                       u.user_id,
+                       u.full_name,
+                       u.email,
+                       pd.status AS connection_status,
+                       pd.patient_doctor_id,
+                       pd.created_at AS connected_at
+                FROM patient pt
+                JOIN users u ON u.user_id = pt.user_id
+                LEFT JOIN patient_doctor pd ON pd.patient_id = pt.patient_id AND pd.doctor_id = %s
+                WHERE UPPER(pt.patient_code) = %s
+                """,
+                (doctor_id, patient_code.strip().upper()),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            res = dict(row)
+            # Count prescriptions
+            cur.execute("SELECT COUNT(*) AS total_rx FROM prescription WHERE patient_id = %s", (res["patient_id"],))
+            rx_row = cur.fetchone()
+            res["total_prescriptions"] = rx_row["total_rx"] if rx_row else 0
+            if res.get("date_of_birth"):
+                res["date_of_birth"] = str(res["date_of_birth"])
+            if res.get("connected_at"):
+                res["connected_at"] = str(res["connected_at"])
+            return res
+
+
+def doctor_connect_patient(doctor_id: int, patient_code: str) -> Dict[str, Any]:
+    """Connect doctor directly with patient via patient_code."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT patient_id, patient_code FROM patient WHERE UPPER(patient_code) = %s",
+                (patient_code.strip().upper(),),
+            )
+            pt = cur.fetchone()
+            if not pt:
+                return {"success": False, "message": f"Patient with code {patient_code} not found."}
+            patient_id = pt["patient_id"]
+
+            cur.execute(
+                "SELECT patient_doctor_id, status FROM patient_doctor WHERE patient_id = %s AND doctor_id = %s",
+                (patient_id, doctor_id),
+            )
+            existing = cur.fetchone()
+            if existing:
+                if existing["status"] == "active":
+                    return {"success": True, "message": "Already connected to this patient.", "status": "active"}
+                cur.execute(
+                    "UPDATE patient_doctor SET status = 'active', created_at = NOW() WHERE patient_doctor_id = %s",
+                    (existing["patient_doctor_id"],),
+                )
+                return {"success": True, "message": "Patient connected successfully!", "status": "active"}
+
+            cur.execute(
+                """
+                INSERT INTO patient_doctor (patient_id, doctor_id, relationship_type, status)
+                VALUES (%s, %s, 'CONSULTING', 'active')
+                """,
+                (patient_id, doctor_id),
+            )
+            return {"success": True, "message": "Patient connected to your care directory!", "status": "active"}
+

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rxify Unified Testing Console</title>
-  <meta name="description" content="All-in-one compact testing frontend for Rxify backend API across Patient, Doctor, Hospital, and Dispensary roles." />
+  <title>Rxify API Testing Workbench</title>
+  <meta name="description" content="Unified, smooth, and complete API testing console for Rxify backend across Patient, Doctor, Hospital, Dispensary, Chat, and Prescriptions." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
     :root {
       --bg: #090d16;
       --bg-alt: #0f172a;
-      --card: rgba(15, 23, 42, 0.75);
+      --card: rgba(15, 23, 42, 0.78);
       --card-border: rgba(255, 255, 255, 0.08);
       --card-hover: rgba(255, 255, 255, 0.12);
       --text: #f1f5f9;
@@ -28,12 +28,14 @@
       --hospital-g: rgba(6, 182, 212, 0.18);
       --dispensary: #f59e0b;
       --dispensary-g: rgba(245, 158, 11, 0.18);
+      --chat: #ec4899;
+      --chat-g: rgba(236, 72, 153, 0.18);
       --error: #f43f5e;
       --error-g: rgba(244, 63, 94, 0.18);
       --font-h: 'Outfit', sans-serif;
       --font-b: 'Inter', sans-serif;
       --font-m: 'JetBrains Mono', monospace;
-      --radius: 0.6rem;
+      --radius: 0.65rem;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -41,65 +43,69 @@
     body {
       background: var(--bg);
       background-image: 
-        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
+        radial-gradient(circle at 12% 15%, rgba(99, 102, 241, 0.09) 0%, transparent 40%),
+        radial-gradient(circle at 88% 85%, rgba(6, 182, 212, 0.09) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 60%);
       background-attachment: fixed;
       font-family: var(--font-b);
       color: var(--text);
       min-height: 100vh;
       font-size: 0.85rem;
       line-height: 1.45;
-      padding-bottom: 220px; /* space for console dock */
+      padding-bottom: 230px;
     }
 
     h1, h2, h3, h4 { font-family: var(--font-h); letter-spacing: -0.01em; }
     button, input, select, textarea { font-family: inherit; font-size: 0.83rem; }
 
     /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
-    /* Layout */
+    /* Header */
     .app-header {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(9, 13, 22, 0.92);
+      background: rgba(9, 13, 22, 0.94);
       backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--card-border);
       padding: 0.5rem 1.25rem;
       display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      flex-wrap: wrap;
     }
 
     .brand { display: flex; align-items: center; gap: 0.6rem; }
     .brand-logo {
-      width: 1.8rem; height: 1.8rem; border-radius: 0.4rem;
+      width: 2rem; height: 2rem; border-radius: 0.5rem;
       background: linear-gradient(135deg, var(--primary), #8b5cf6);
-      display: grid; place-items: center; font-weight: 800; font-size: 1rem; color: #fff;
-      box-shadow: 0 0 12px var(--primary-g);
+      display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff;
+      box-shadow: 0 0 14px var(--primary-g);
     }
-    .brand-title { font-size: 1.1rem; font-weight: 700; background: linear-gradient(to right, #fff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand-title { font-size: 1.15rem; font-weight: 700; background: linear-gradient(to right, #fff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .brand-tag { font-size: 0.68rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(255,255,255,0.06); border-radius: 4px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
     /* Navigation Role Tabs */
-    .role-nav { display: flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.03); padding: 0.2rem; border-radius: var(--radius); border: 1px solid var(--card-border); }
+    .role-nav { display: flex; align-items: center; gap: 0.3rem; background: rgba(255,255,255,0.03); padding: 0.2rem; border-radius: var(--radius); border: 1px solid var(--card-border); overflow-x: auto; }
     .role-btn {
       background: transparent; border: none; color: var(--muted);
-      padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-weight: 600; cursor: pointer;
-      display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;
+      padding: 0.45rem 0.75rem; border-radius: 0.4rem; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s; white-space: nowrap;
     }
     .role-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
     .role-btn.active.patient { background: var(--patient-g); color: var(--patient); border: 1px solid rgba(16, 185, 129, 0.3); }
     .role-btn.active.doctor { background: var(--doctor-g); color: var(--doctor); border: 1px solid rgba(99, 102, 241, 0.3); }
     .role-btn.active.hospital { background: var(--hospital-g); color: var(--hospital); border: 1px solid rgba(6, 182, 212, 0.3); }
     .role-btn.active.dispensary { background: var(--dispensary-g); color: var(--dispensary); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .role-btn.active.chat { background: var(--chat-g); color: var(--chat); border: 1px solid rgba(236, 72, 153, 0.3); }
+    .role-btn.active.catalog { background: var(--primary-g); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.3); }
     .role-btn.active.raw { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
 
-    /* Active Auth Badge Bar */
-    .header-actions { display: flex; align-items: center; gap: 0.6rem; }
+    /* Header Actions */
+    .header-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
     .quick-preset-select {
       background: rgba(15, 23, 42, 0.9); border: 1px solid var(--card-border);
-      color: var(--text); padding: 0.35rem 0.6rem; border-radius: 0.4rem; font-weight: 500; cursor: pointer;
+      color: var(--text); padding: 0.38rem 0.65rem; border-radius: 0.4rem; font-weight: 500; cursor: pointer;
       outline: none; transition: border-color 0.2s;
     }
     .quick-preset-select:hover { border-color: var(--primary); }
@@ -107,24 +113,23 @@
     .auth-chip {
       display: flex; align-items: center; gap: 0.5rem;
       background: rgba(15, 23, 42, 0.8); border: 1px solid var(--card-border);
-      padding: 0.3rem 0.7rem; border-radius: 50px; font-size: 0.75rem;
+      padding: 0.35rem 0.75rem; border-radius: 50px; font-size: 0.75rem;
     }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #64748b; }
     .status-dot.active { background: var(--patient); box-shadow: 0 0 6px var(--patient); }
 
     .btn-xs {
       background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text);
-      padding: 0.3rem 0.65rem; border-radius: 0.4rem; font-weight: 600; font-size: 0.75rem; cursor: pointer;
+      padding: 0.32rem 0.65rem; border-radius: 0.4rem; font-weight: 600; font-size: 0.75rem; cursor: pointer;
       transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.3rem;
     }
     .btn-xs:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
     .btn-danger { color: var(--error); border-color: rgba(244,63,94,0.3); }
     .btn-danger:hover { background: var(--error-g); }
 
-    /* Container Main */
-    .main-container { padding: 1.25rem; max-width: 1480px; margin: 0 auto; }
+    /* Layout */
+    .main-container { padding: 1.25rem; max-width: 1540px; margin: 0 auto; }
 
-    /* Cards & Grids */
     .grid { display: grid; gap: 1rem; }
     .grid-2 { grid-template-columns: 1fr 1fr; }
     .grid-3 { grid-template-columns: repeat(3, 1fr); }
@@ -147,12 +152,12 @@
     }
     .card-title { font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
 
-    /* Compact Form Inputs */
+    /* Form Controls */
     .form-row { display: flex; gap: 0.6rem; margin-bottom: 0.65rem; }
     .form-group { flex: 1; display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.65rem; }
     .form-group label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
     .input {
-      width: 100%; background: rgba(9, 13, 22, 0.8); border: 1px solid var(--card-border);
+      width: 100%; background: rgba(9, 13, 22, 0.85); border: 1px solid var(--card-border);
       border-radius: 0.4rem; padding: 0.45rem 0.75rem; color: var(--text);
       outline: none; transition: all 0.2s; font-family: inherit;
     }
@@ -165,17 +170,18 @@
       font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;
       display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
     }
-    .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-action:hover { opacity: 0.92; transform: translateY(-1px); }
     .btn-action:active { transform: translateY(0); }
     .btn-action.patient { background: linear-gradient(135deg, var(--patient), #059669); }
     .btn-action.doctor { background: linear-gradient(135deg, var(--doctor), #4f46e5); }
     .btn-action.hospital { background: linear-gradient(135deg, var(--hospital), #0891b2); }
     .btn-action.dispensary { background: linear-gradient(135deg, var(--dispensary), #d97706); }
+    .btn-action.chat { background: linear-gradient(135deg, var(--chat), #db2777); }
 
-    /* Simple Table */
-    .table-responsive { width: 100%; overflow-x: auto; max-height: 340px; }
+    /* Tables */
+    .table-responsive { width: 100%; overflow-x: auto; max-height: 320px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left; }
-    th { padding: 0.5rem 0.65rem; background: rgba(255,255,255,0.03); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; border-bottom: 1px solid var(--card-border); position: sticky; top: 0; }
+    th { padding: 0.5rem 0.65rem; background: rgba(255,255,255,0.03); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.05em; border-bottom: 1px solid var(--card-border); position: sticky; top: 0; z-index: 2; }
     td { padding: 0.55rem 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
     tr:hover td { background: rgba(255,255,255,0.025); }
 
@@ -191,8 +197,12 @@
     .badge-info { background: var(--primary-g); color: var(--primary); border: 1px solid rgba(59,130,246,0.3); }
     .badge-warn { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
     .badge-error { background: var(--error-g); color: var(--error); border: 1px solid rgba(244,63,94,0.3); }
+    .badge-get { background: rgba(59, 130, 246, 0.2); color: #60a5fa; font-family: var(--font-m); }
+    .badge-post { background: rgba(16, 185, 129, 0.2); color: #34d399; font-family: var(--font-m); }
+    .badge-put { background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-family: var(--font-m); }
+    .badge-delete { background: rgba(244, 63, 94, 0.2); color: #f87171; font-family: var(--font-m); }
 
-    /* Metric Tiles */
+    /* Metric Cards */
     .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
     .metric-card { background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 0.5rem; padding: 0.75rem; display: flex; align-items: center; gap: 0.75rem; }
     .metric-icon { width: 2.2rem; height: 2.2rem; border-radius: 0.4rem; display: grid; place-items: center; font-size: 1.1rem; }
@@ -207,11 +217,12 @@
     }
     .drop-zone:hover { border-color: var(--patient); background: var(--patient-g); }
 
-    /* Bottom API Console & Log Inspector */
+    /* Bottom API Network Console Dock */
     .console-dock {
-      position: fixed; bottom: 0; left: 0; right: 0; height: 200px; z-index: 200;
+      position: fixed; bottom: 0; left: 0; right: 0; height: 220px; z-index: 200;
       background: #050811; border-top: 1px solid var(--card-border);
       display: flex; flex-direction: column; transition: height 0.25s ease;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
     }
     .console-dock.collapsed { height: 32px; }
 
@@ -227,11 +238,12 @@
     .console-logs { flex: 1; overflow-y: auto; padding: 0.5rem; font-family: var(--font-m); font-size: 0.74rem; }
     .log-item {
       display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-      padding: 0.25rem 0.5rem; border-radius: 4px; border-bottom: 1px solid rgba(255,255,255,0.03);
+      padding: 0.3rem 0.5rem; border-radius: 4px; border-bottom: 1px solid rgba(255,255,255,0.03);
       cursor: pointer; transition: background 0.15s;
     }
-    .log-item:hover { background: rgba(255,255,255,0.04); }
-    .log-method { font-weight: 700; width: 45px; }
+    .log-item:hover { background: rgba(255,255,255,0.05); }
+    .log-item.selected { background: rgba(59, 130, 246, 0.15); border-left: 3px solid var(--primary); }
+    .log-method { font-weight: 700; width: 50px; }
     .log-method.GET { color: #60a5fa; }
     .log-method.POST { color: #34d399; }
     .log-method.PUT { color: #fbbf24; }
@@ -244,7 +256,7 @@
 
     .console-inspector {
       width: 45%; border-left: 1px solid var(--card-border); background: #03060d;
-      padding: 0.5rem; overflow-y: auto; font-family: var(--font-m); font-size: 0.72rem; color: #a7f3d0;
+      padding: 0.6rem; overflow-y: auto; font-family: var(--font-m); font-size: 0.72rem; color: #a7f3d0;
       white-space: pre-wrap; word-break: break-word;
     }
 
@@ -258,8 +270,16 @@
     .toast-box.show { display: block; animation: slideIn 0.2s ease; }
     @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    /* Code block container */
-    .code-view { background: #050811; border: 1px solid var(--card-border); border-radius: 0.4rem; padding: 0.5rem; font-family: var(--font-m); font-size: 0.75rem; color: #94a3b8; max-height: 220px; overflow-y: auto; white-space: pre-wrap; }
+    /* Code View */
+    .code-view { background: #050811; border: 1px solid var(--card-border); border-radius: 0.4rem; padding: 0.6rem; font-family: var(--font-m); font-size: 0.75rem; color: #94a3b8; max-height: 250px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+
+    /* API Catalog Endpoint Cards */
+    .catalog-item {
+      background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border);
+      border-radius: 0.4rem; padding: 0.65rem 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .catalog-item:hover { border-color: var(--primary); background: rgba(59, 130, 246, 0.08); transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -270,7 +290,7 @@
       <div class="brand-logo">Rx</div>
       <div>
         <span class="brand-title">Rxify API</span>
-        <span class="brand-tag">Testing Console</span>
+        <span class="brand-tag">Testing Workbench v0.5</span>
       </div>
     </div>
 
@@ -280,19 +300,20 @@
       <button class="role-btn doctor" onclick="switchRoleView('doctor')">🩺 Doctor</button>
       <button class="role-btn hospital" onclick="switchRoleView('hospital')">🏥 Hospital</button>
       <button class="role-btn dispensary" onclick="switchRoleView('dispensary')">💊 Dispensary</button>
-      <button class="role-btn raw" onclick="switchRoleView('raw')">🛠 API Tester</button>
+      <button class="role-btn chat" onclick="switchRoleView('chat')">💬 Chat</button>
+      <button class="role-btn catalog" onclick="switchRoleView('catalog')">📚 API Catalog</button>
+      <button class="role-btn raw" onclick="switchRoleView('raw')">🛠 Custom Tester</button>
     </nav>
 
     <!-- Quick Actions & Auth State -->
     <div class="header-actions">
-      <!-- Quick Demo Login Presets -->
       <select class="quick-preset-select" onchange="quickLoginPreset(this.value)">
         <option value="">⚡ One-Click Login Presets…</option>
         <option value="patient">👤 Demo Patient (patient1@rxify.com)</option>
         <option value="doctor">🩺 Demo Doctor (doctor1@rxify.com)</option>
         <option value="hospital">🏥 Demo Hospital (hospital1@rxify.com)</option>
-        <option value="new_patient">➕ Quick Register New Patient</option>
-        <option value="new_doctor">➕ Quick Register New Doctor</option>
+        <option value="new_patient">➕ Quick Auto-Create Patient</option>
+        <option value="new_doctor">➕ Quick Auto-Create Doctor</option>
       </select>
 
       <div class="auth-chip">
@@ -306,31 +327,28 @@
 
   <main class="main-container">
 
-    <!-- Auth / Quick Login Banner & Form -->
+    <!-- Global Auth Banner -->
     <div id="loggedOutBanner" class="card" style="margin-bottom: 1.25rem; border-color: rgba(99, 102, 241, 0.4);">
       <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; align-items: start;">
-        
-        <!-- Left: Quick Info & Presets -->
         <div>
-          <h3 style="font-size: 1.15rem; margin-bottom: 0.3rem; color: #fff;">🔑 Sign In / Register to Test API</h3>
+          <h3 style="font-size: 1.15rem; margin-bottom: 0.3rem; color: #fff;">🔑 Sign In / Register to Test Endpoints</h3>
           <p style="color: var(--muted); font-size: 0.82rem; margin-bottom: 1rem;">
-            Sign in with an existing account, create a new user, or use one-click demo presets below.
+            Click a 1-click preset to instantly log in as a Patient, Doctor, or Hospital, or create a brand new account below.
           </p>
           
           <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.8rem;">
-            <button class="btn-action patient" onclick="quickLoginPreset('patient')">⚡ Demo Patient</button>
-            <button class="btn-action doctor" onclick="quickLoginPreset('doctor')">⚡ Demo Doctor</button>
-            <button class="btn-action hospital" onclick="quickLoginPreset('hospital')">⚡ Demo Hospital</button>
+            <button class="btn-action patient" onclick="quickLoginPreset('patient')">⚡ Login Demo Patient</button>
+            <button class="btn-action doctor" onclick="quickLoginPreset('doctor')">⚡ Login Demo Doctor</button>
+            <button class="btn-action hospital" onclick="quickLoginPreset('hospital')">⚡ Login Demo Hospital</button>
           </div>
           <div style="display: flex; gap: 0.5rem;">
-            <button class="btn-xs" onclick="quickLoginPreset('new_patient')">➕ Quick Auto-Create Patient</button>
-            <button class="btn-xs" onclick="quickLoginPreset('new_doctor')">➕ Quick Auto-Create Doctor</button>
+            <button class="btn-xs" onclick="quickLoginPreset('new_patient')">➕ Quick Auto-Register Patient</button>
+            <button class="btn-xs" onclick="quickLoginPreset('new_doctor')">➕ Quick Auto-Register Doctor</button>
           </div>
         </div>
 
-        <!-- Right: Manual Login & Register Form -->
         <div style="background: rgba(0,0,0,0.25); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--card-border);">
-          <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.6rem; color: var(--muted); text-transform: uppercase;">Custom User Auth</div>
+          <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.6rem; color: var(--muted); text-transform: uppercase;">Custom Credentials Auth</div>
           <div class="form-group" style="margin-bottom: 0.5rem;">
             <label>Username / Email</label>
             <input type="text" id="authInputUser" class="input" placeholder="user@rxify.com">
@@ -354,7 +372,6 @@
           </div>
           <div id="manualAuthAlert" style="margin-top: 0.5rem; font-size: 0.78rem;"></div>
         </div>
-
       </div>
     </div>
 
@@ -363,51 +380,49 @@
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="viewPatient" class="view-panel">
       
-      <!-- Patient Header Info Card -->
       <div class="card" style="margin-bottom: 1rem; border-left: 3px solid var(--patient);">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
           <div>
-            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--patient);">👤 Patient Module Testing</h2>
-            <p style="color: var(--muted); font-size: 0.8rem;">Upload OCR prescriptions, view active medications, and request doctor links using your unique code.</p>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--patient);">👤 Patient Module</h2>
+            <p style="color: var(--muted); font-size: 0.8rem;">Upload OCR prescriptions, check patient stats, request doctor links, and book appointments.</p>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span class="badge badge-patient" id="patientCodeBadge">Patient Code: Loading…</span>
-            <button class="btn-xs" onclick="loadPatientProfile()">🔄 Refresh</button>
+            <button class="btn-xs" onclick="loadPatientProfile()">🔄 Refresh All</button>
           </div>
         </div>
       </div>
 
       <div class="grid grid-2">
-        <!-- OCR Scan / Upload -->
+        <!-- OCR Upload -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">📷 Prescription OCR Scan (POST /api/upload)</span>
+            <span class="card-title">📷 Prescription OCR Scan (POST /api/upload & GET /api/job/{id})</span>
           </div>
           <div class="drop-zone" onclick="document.getElementById('patientFileInput').click()">
             <span style="font-size: 1.8rem; display: block; margin-bottom: 0.4rem; color: var(--patient);">📄</span>
             <div style="font-weight: 600;">Click or Drop Prescription Image</div>
-            <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem;">JPEG, PNG, WEBP, HEIC</div>
+            <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem;">Supports PNG, JPG, WEBP, HEIC</div>
             <input type="file" id="patientFileInput" accept="image/*" style="display:none;" onchange="uploadPrescription(this.files[0])">
           </div>
           <div id="uploadStatus" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--muted);"></div>
         </div>
 
-        <!-- Lookup Prescription by ID -->
+        <!-- Medicine / Prescription Lookup -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">🔍 Prescription Lookup (GET /api/medicine_info/p/{id})</span>
           </div>
           <div class="form-row">
-            <input type="number" id="rxLookupId" class="input" placeholder="Enter Prescription ID (e.g. 1)" min="1">
-            <button class="btn-action patient" onclick="lookupPrescriptionById()">Search</button>
+            <input type="number" id="rxLookupId" class="input" placeholder="Prescription ID (e.g. 1)" min="1">
+            <button class="btn-action patient" onclick="lookupPrescriptionById()">Fetch Detail</button>
           </div>
-          <div id="rxLookupResult" class="code-view" style="margin-top: 0.5rem;">Result will appear here…</div>
+          <div id="rxLookupResult" class="code-view" style="margin-top: 0.5rem;">Prescription JSON detail will display here…</div>
         </div>
       </div>
 
-      <!-- Connect to Doctor & My Requests -->
+      <!-- Doctor Requests & Doctor Info -->
       <div class="grid grid-2" style="margin-top: 1rem;">
-        <!-- Connect Doctor -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">🩺 Connect to Doctor (POST /api/patient/request-doctor)</span>
@@ -417,7 +432,12 @@
             <button class="btn-xs" onclick="patientLookupDoctor()">Lookup Doctor</button>
           </div>
           <div id="doctorSearchResult" style="margin-bottom: 0.65rem;"></div>
-          <button class="btn-action patient" id="btnSendDoctorReq" style="display:none; width: 100%;" onclick="sendDoctorConnectionReq()">Send Connection Request →</button>
+          <button class="btn-action patient" id="btnSendDoctorReq" style="display:none; width: 100%;" onclick="sendDoctorConnectionReq()">Send Request →</button>
+          
+          <div style="margin-top: 1rem; border-top: 1px solid var(--card-border); padding-top: 0.75rem;">
+            <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 0.4rem; color: var(--muted);">My Connected Doctor (GET /api/patient/my-doctor):</div>
+            <div id="patientMyDoctorBox" class="code-view" style="min-height: 50px;">Click Refresh to load linked doctor.</div>
+          </div>
         </div>
 
         <!-- Connection Requests Table -->
@@ -437,20 +457,57 @@
                 </tr>
               </thead>
               <tbody id="patientReqsTbody">
-                <tr><td colspan="4" style="text-align:center; color:var(--muted);">Click reload or sign in as patient</td></tr>
+                <tr><td colspan="4" style="text-align:center; color:var(--muted);">Sign in as patient to view requests</td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      <!-- Patient Prescriptions & Medications -->
-      <div class="card" style="margin-top: 1rem;">
-        <div class="card-header">
-          <span class="card-title">💊 My Prescriptions & Medications (GET /api/patient/my-prescriptions)</span>
-          <button class="btn-xs" onclick="loadPatientPrescriptions()">Refresh My Prescriptions</button>
+      <!-- Patient Prescriptions & Appointments -->
+      <div class="grid grid-2" style="margin-top: 1rem;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">💊 My Prescriptions (GET /api/patient/prescriptions)</span>
+            <button class="btn-xs" onclick="loadPatientPrescriptions()">Reload</button>
+          </div>
+          <div id="patientPrescriptionsContainer" class="code-view">Click Reload to list patient prescriptions.</div>
         </div>
-        <div id="patientPrescriptionsContainer" class="code-view">Click Refresh to load active prescriptions.</div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📅 Patient Appointments (GET/POST /api/patient/appointments)</span>
+            <button class="btn-xs" onclick="loadPatientAppointments()">Reload</button>
+          </div>
+          <div class="form-row">
+            <select id="patientApptDocSelect" class="input" onchange="loadDoctorSlotsForPatient(this.value)">
+              <option value="">Select Doctor to view slots…</option>
+            </select>
+            <button class="btn-xs" onclick="loadDoctorsForAppointment()">Fetch Doctors</button>
+          </div>
+          <div class="form-row" id="patientSlotsRow" style="display:none;">
+            <select id="patientSlotSelect" class="input">
+              <option value="">Select available slot…</option>
+            </select>
+            <button class="btn-action patient" onclick="bookAppointmentAsPatient()">Book Slot</button>
+          </div>
+          <div class="table-responsive" style="margin-top: 0.75rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Doctor</th>
+                  <th>Date & Time</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="patientApptsTbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--muted);">No appointments booked</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -460,12 +517,11 @@
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="viewDoctor" class="view-panel" style="display:none;">
       
-      <!-- Doctor Header Info Card -->
       <div class="card" style="margin-bottom: 1rem; border-left: 3px solid var(--doctor);">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
           <div>
-            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--doctor);">🩺 Doctor Module Testing</h2>
-            <p style="color: var(--muted); font-size: 0.8rem;">Review patient requests, access medical histories, manage appointment slots, and update status.</p>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--doctor);">🩺 Doctor Module</h2>
+            <p style="color: var(--muted); font-size: 0.8rem;">Review patient connection requests, manage appointments, update profile, and manage slot availability.</p>
           </div>
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn-xs" onclick="loadDoctorDashboard()">🔄 Refresh All</button>
@@ -473,13 +529,13 @@
         </div>
       </div>
 
-      <!-- Doctor Metrics -->
+      <!-- Doctor Stats -->
       <div class="metric-grid">
         <div class="metric-card">
           <div class="metric-icon" style="background: var(--doctor-g); color: var(--doctor);">👥</div>
           <div>
             <div class="metric-val" id="docStatPatients">—</div>
-            <div class="metric-lbl">Patients</div>
+            <div class="metric-lbl">Total Patients</div>
           </div>
         </div>
         <div class="metric-card">
@@ -500,13 +556,13 @@
           <div class="metric-icon" style="background: var(--patient-g); color: var(--patient);">📅</div>
           <div>
             <div class="metric-val" id="docStatFollowups">—</div>
-            <div class="metric-lbl">Follow-ups</div>
+            <div class="metric-lbl">Upcoming Appts</div>
           </div>
         </div>
       </div>
 
       <div class="grid grid-2">
-        <!-- Patient Requests Approval -->
+        <!-- Patient Requests -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">🔔 Pending Patient Requests (GET /api/doctor/requests)</span>
@@ -518,12 +574,11 @@
                 <tr>
                   <th>Patient</th>
                   <th>Username</th>
-                  <th>Prescriptions</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody id="docRequestsTbody">
-                <tr><td colspan="4" style="text-align:center; color:var(--muted);">No pending requests</td></tr>
+                <tr><td colspan="3" style="text-align:center; color:var(--muted);">No pending requests</td></tr>
               </tbody>
             </table>
           </div>
@@ -532,52 +587,93 @@
         <!-- Doctor Profile Edit -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">⚙ Doctor Profile (GET & PUT /api/doctor/profile)</span>
+            <span class="card-title">⚙ Profile (GET & PUT /api/doctor/profile)</span>
+            <button class="btn-xs" onclick="loadDoctorProfile()">Load</button>
           </div>
           <div class="form-group">
             <label>Display Name</label>
-            <input type="text" id="docProfileName" class="input" placeholder="e.g. Dr. John Smith">
+            <input type="text" id="docProfileName" class="input" placeholder="e.g. Dr. Jane Smith">
           </div>
           <div class="form-group">
-            <label>Specialties</label>
-            <input type="text" id="docProfileSpecialty" class="input" placeholder="e.g. Cardiology, Internal Medicine">
+            <label>Specialty</label>
+            <input type="text" id="docProfileSpecialty" class="input" placeholder="e.g. Cardiology">
           </div>
           <button class="btn-action doctor" onclick="saveDoctorProfile()">Save Profile</button>
         </div>
       </div>
 
-      <!-- Doctor Appointments Management -->
-      <div class="card" style="margin-top: 1rem;">
-        <div class="card-header">
-          <span class="card-title">📅 Appointments Manager (GET /api/doctor/appointments)</span>
-          <div style="display:flex; gap:0.4rem;">
-            <select class="input" id="apptStatusFilter" onchange="loadDoctorAppointments()" style="width: auto; padding: 0.25rem 0.5rem;">
-              <option value="">All Statuses</option>
-              <option value="booked">Booked</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-            <button class="btn-xs" onclick="loadDoctorAppointments()">Filter</button>
+      <!-- Doctor Slots & Appointments -->
+      <div class="grid grid-2" style="margin-top: 1rem;">
+        <!-- Manage Doctor Availability Slots -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⏰ Manage Availability Slots (GET/POST /api/doctor/appointments/slots)</span>
+            <button class="btn-xs" onclick="loadDoctorSlots()">Reload Slots</button>
+          </div>
+          <div class="form-row">
+            <input type="date" id="slotDate" class="input">
+            <input type="time" id="slotStartTime" class="input" value="09:00">
+            <input type="time" id="slotEndTime" class="input" value="10:00">
+            <button class="btn-action doctor" onclick="createDoctorSlot()">Add Slot</button>
+          </div>
+          <div class="table-responsive" style="margin-top: 0.5rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Slot ID</th>
+                  <th>Date</th>
+                  <th>Time Range</th>
+                  <th>Max</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="docSlotsTbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--muted);">No slots added yet</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>Appt ID</th>
-                <th>Patient</th>
-                <th>Slot Date</th>
-                <th>Time</th>
-                <th>Status</th>
-                <th>Update Status</th>
-              </tr>
-            </thead>
-            <tbody id="docApptsTbody">
-              <tr><td colspan="6" style="text-align:center; color:var(--muted);">Load appointments to test status updates</td></tr>
-            </tbody>
-          </table>
+
+        <!-- Appointments Manager -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📅 Doctor Appointments (GET /api/doctor/appointments)</span>
+            <div style="display:flex; gap:0.4rem;">
+              <select class="input" id="apptStatusFilter" onchange="loadDoctorAppointments()" style="width: auto; padding: 0.25rem 0.5rem;">
+                <option value="">All Statuses</option>
+                <option value="booked">Booked</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Appt ID</th>
+                  <th>Patient</th>
+                  <th>Date & Time</th>
+                  <th>Status</th>
+                  <th>Update</th>
+                </tr>
+              </thead>
+              <tbody id="docApptsTbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--muted);">Load appointments to test</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
+      </div>
+
+      <!-- Doctor Patients & Prescriptions -->
+      <div class="card" style="margin-top: 1rem;">
+        <div class="card-header">
+          <span class="card-title">👥 Doctor My Patients (GET /api/doctor/my-patients)</span>
+          <button class="btn-xs" onclick="loadDoctorPatients()">Reload Patients</button>
+        </div>
+        <div id="docPatientsContainer" class="code-view">Click Reload Patients to fetch list of linked patients and their prescriptions.</div>
       </div>
 
     </div>
@@ -587,12 +683,11 @@
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="viewHospital" class="view-panel" style="display:none;">
       
-      <!-- Hospital Header Info Card -->
       <div class="card" style="margin-bottom: 1rem; border-left: 3px solid var(--hospital);">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; align-items: justify-between; flex-wrap: wrap; gap: 0.75rem;">
           <div>
-            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--hospital);">🏥 Hospital Module Testing</h2>
-            <p style="color: var(--muted); font-size: 0.8rem;">Separate hospital authentication, dashboard analytics, and QR patient_code lookup.</p>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--hospital);">🏥 Hospital Module</h2>
+            <p style="color: var(--muted); font-size: 0.8rem;">Hospital admin login, aggregated metrics dashboard, patient code lookup, and affiliated doctor management.</p>
           </div>
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn-xs" onclick="quickLoginPreset('hospital')">Login Demo Hospital</button>
@@ -602,20 +697,20 @@
       </div>
 
       <div class="grid grid-2">
-        <!-- Hospital Auth Form -->
+        <!-- Hospital Auth -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">🔑 Hospital Login & Registration</span>
+            <span class="card-title">🔑 Hospital Login (POST /api/hospital/login)</span>
           </div>
           <div class="form-group">
-            <label>Email</label>
+            <label>Hospital Email</label>
             <input type="email" id="hospEmail" class="input" placeholder="hospital1@rxify.com" value="hospital1@rxify.com">
           </div>
           <div class="form-group">
             <label>Password</label>
             <input type="password" id="hospPass" class="input" placeholder="Password" value="hospital123">
           </div>
-          <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem;">
+          <div style="display: flex; gap: 0.5rem;">
             <button class="btn-action hospital" style="flex:1;" onclick="hospitalLogin()">Hospital Login</button>
             <button class="btn-xs" onclick="hospitalRegister()">Register Hospital</button>
           </div>
@@ -624,23 +719,59 @@
         <!-- Patient Code Lookup -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">🔍 Lookup Patient by Code (GET /api/hospital/patients/{code})</span>
+            <span class="card-title">🔍 Patient Code Lookup (GET /api/hospital/patients/{code})</span>
           </div>
           <div class="form-row">
             <input type="text" id="hospPatientCode" class="input" placeholder="Patient Code (e.g. RXF-P-ABC12)">
             <button class="btn-action hospital" onclick="hospitalLookupPatient()">Lookup</button>
           </div>
-          <div id="hospLookupResult" class="code-view" style="margin-top: 0.5rem;">Patient details & prescriptions will be loaded here…</div>
+          <div id="hospLookupResult" class="code-view" style="margin-top: 0.5rem;">Patient details & prescriptions will display here…</div>
         </div>
       </div>
 
-      <!-- Hospital Dashboard Overview -->
-      <div class="card" style="margin-top: 1rem;">
-        <div class="card-header">
-          <span class="card-title">📊 Hospital Dashboard & Audit Log (GET /api/hospital/dashboard)</span>
-          <button class="btn-xs" onclick="loadHospitalDashboard()">Reload</button>
+      <!-- Hospital Affiliated Doctors -->
+      <div class="grid grid-2" style="margin-top: 1rem;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🩺 Affiliated Doctors (GET & POST /api/hospital/doctors)</span>
+            <button class="btn-xs" onclick="loadHospitalDoctors()">Reload</button>
+          </div>
+          <div class="form-group">
+            <label>Create Doctor Account & Link</label>
+            <div class="form-row">
+              <input type="text" id="hospNewDocName" class="input" placeholder="Doctor Name">
+              <input type="email" id="hospNewDocEmail" class="input" placeholder="doctor@hospital.com">
+            </div>
+            <div class="form-row">
+              <input type="password" id="hospNewDocPass" class="input" placeholder="Password">
+              <input type="text" id="hospNewDocSpec" class="input" placeholder="Specialty">
+              <button class="btn-action hospital" onclick="addHospitalDoctor()">Add Doctor</button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Doc ID</th>
+                  <th>Name</th>
+                  <th>Specialty</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="hospDoctorsTbody">
+                <tr><td colspan="4" style="text-align:center; color:var(--muted);">Sign in as hospital to manage doctors</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div id="hospDashboardContainer" class="code-view">Sign in as hospital to load aggregated hospital statistics.</div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 Hospital Dashboard (GET /api/hospital/dashboard)</span>
+            <button class="btn-xs" onclick="loadHospitalDashboard()">Reload</button>
+          </div>
+          <div id="hospDashboardContainer" class="code-view">Aggregated hospital data will display here.</div>
+        </div>
       </div>
 
     </div>
@@ -650,12 +781,11 @@
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="viewDispensary" class="view-panel" style="display:none;">
       
-      <!-- Dispensary Header Info Card -->
       <div class="card" style="margin-bottom: 1rem; border-left: 3px solid var(--dispensary);">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
           <div>
-            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--dispensary);">💊 Dispensary Module Testing</h2>
-            <p style="color: var(--muted); font-size: 0.8rem;">Dispensary inventory check and prescription fulfillment status.</p>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--dispensary);">💊 Dispensary Module</h2>
+            <p style="color: var(--muted); font-size: 0.8rem;">Inventory medicine availability check and stock status inspection.</p>
           </div>
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn-xs" onclick="loadDispensaryStock()">🔄 Check Stock</button>
@@ -674,12 +804,89 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════
-         RAW API TESTER
+         CHAT VIEW
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div id="viewChat" class="view-panel" style="display:none;">
+      
+      <div class="card" style="margin-bottom: 1rem; border-left: 3px solid var(--chat);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--chat);">💬 Chat & Direct Messaging</h2>
+            <p style="color: var(--muted); font-size: 0.8rem;">Test live conversations between linked Patients and Doctors.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn-xs" onclick="loadChatConversations()">🔄 Reload Conversations</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">💬 Recent Conversations (GET /api/chat/conversations)</span>
+          </div>
+          <div id="chatConversationsBox" class="code-view" style="min-height: 120px;">Click Reload to list conversations.</div>
+          
+          <div style="margin-top: 1rem; border-top: 1px solid var(--card-border); padding-top: 0.75rem;">
+            <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 0.4rem; color: var(--muted);">Fetch Messages with User ID (GET /api/chat/messages/{id}):</div>
+            <div class="form-row">
+              <input type="number" id="chatRecipientId" class="input" placeholder="Other User ID (e.g. 2)">
+              <button class="btn-action chat" onclick="loadChatMessages()">Fetch Chat</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">✉ Send Message (POST /api/chat/send)</span>
+          </div>
+          <div class="form-group">
+            <label>Recipient User ID</label>
+            <input type="number" id="chatSendTargetId" class="input" placeholder="Recipient ID">
+          </div>
+          <div class="form-group">
+            <label>Message Content</label>
+            <textarea id="chatSendMessageText" class="input" placeholder="Type your message here..."></textarea>
+          </div>
+          <button class="btn-action chat" style="width: 100%;" onclick="sendChatMessage()">Send Message 🚀</button>
+          
+          <div style="margin-top: 1rem;">
+            <label style="font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase;">Message History Output:</label>
+            <div id="chatHistoryBox" class="code-view" style="margin-top: 0.35rem; min-height: 100px;">Messages will display here...</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         API ROUTE CATALOG (ALL ENDPOINTS MATRIX)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div id="viewCatalog" class="view-panel" style="display:none;">
+      
+      <div class="card" style="margin-bottom: 1rem;">
+        <div class="card-header">
+          <span class="card-title">📚 Comprehensive Rxify API Route Catalog</span>
+          <input type="text" id="catalogSearch" class="input" placeholder="Filter endpoints by path or tag..." style="width: 280px;" oninput="filterCatalog(this.value)">
+        </div>
+        <p style="color: var(--muted); font-size: 0.8rem; margin-bottom: 1rem;">
+          Click on any endpoint below to automatically load its path, HTTP method, and template payload into the Custom Request Builder!
+        </p>
+
+        <div class="grid grid-2" id="catalogGrid">
+          <!-- Populated by JavaScript catalog array -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         CUSTOM RAW API TESTER
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="viewRaw" class="view-panel" style="display:none;">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🛠 Custom Raw REST API Endpoint Runner</span>
+          <span class="card-title">🛠 Custom REST API Endpoint Request Builder</span>
         </div>
         <div class="grid grid-4" style="margin-bottom: 0.75rem;">
           <div class="form-group" style="grid-column: span 1;">
@@ -697,14 +904,14 @@
           </div>
         </div>
         <div class="form-group">
-          <label>JSON Payload / Body (Optional for POST/PUT)</label>
+          <label>JSON Request Body (Optional for POST / PUT)</label>
           <textarea id="rawBody" class="input" placeholder='{"key": "value"}'></textarea>
         </div>
-        <button class="btn-action" style="background: linear-gradient(135deg, #475569, #1e293b);" onclick="executeRawApi()">Execute API Request 🚀</button>
+        <button class="btn-action" style="background: linear-gradient(135deg, #475569, #1e293b);" onclick="executeRawApi()">Execute Request 🚀</button>
         
         <div style="margin-top: 1rem;">
-          <label style="font-size: 0.72rem; color: var(--muted); text-transform: uppercase; font-weight: 700;">Response Output:</label>
-          <div id="rawResponse" class="code-view" style="margin-top: 0.35rem; min-height: 120px;">Execution output will display here…</div>
+          <label style="font-size: 0.72rem; color: var(--muted); text-transform: uppercase; font-weight: 700;">Response Payload Output:</label>
+          <div id="rawResponse" class="code-view" style="margin-top: 0.35rem; min-height: 140px;">Response JSON output will display here…</div>
         </div>
       </div>
     </div>
@@ -719,15 +926,15 @@
         <span id="logCounter" class="badge badge-info" style="font-size: 0.65rem;">0 Requests</span>
       </div>
       <div class="console-actions">
-        <span style="color: var(--muted);">Click to toggle collapse</span>
-        <button class="btn-xs" onclick="event.stopPropagation(); clearLogs();">Clear</button>
+        <span style="color: var(--muted);">Click bar to collapse/expand</span>
+        <button class="btn-xs" onclick="event.stopPropagation(); clearLogs();">Clear Logs</button>
       </div>
     </div>
     <div class="console-body">
       <div class="console-logs" id="consoleLogs">
-        <div style="color: var(--muted); padding: 0.5rem; text-align: center;">No API calls logged yet. Perform any action above!</div>
+        <div style="color: var(--muted); padding: 0.5rem; text-align: center;">No API calls logged yet. Click any button above!</div>
       </div>
-      <div class="console-inspector" id="consoleInspector">Select a request log on the left to inspect full payload/response JSON.</div>
+      <div class="console-inspector" id="consoleInspector">Select a log entry on the left to inspect payload & status details.</div>
     </div>
   </div>
 
@@ -752,9 +959,52 @@
 
     let logHistory = [];
 
+    const ALL_ENDPOINTS = [
+      { method: 'GET', path: '/api/health', tag: 'System', body: '' },
+      { method: 'POST', path: '/api/register', tag: 'Auth', body: '{\n  "username": "user@rxify.com",\n  "password": "password123",\n  "role": "PATIENT"\n}' },
+      { method: 'POST', path: '/api/login', tag: 'Auth', body: 'username=patient1@rxify.com&password=patient123' },
+      { method: 'POST', path: '/api/upload', tag: 'OCR', body: '[FormData file]' },
+      { method: 'GET', path: '/api/job/{job_id}', tag: 'OCR', body: '' },
+      { method: 'GET', path: '/api/patient/me', tag: 'Patient', body: '' },
+      { method: 'GET', path: '/api/patient/stats', tag: 'Patient', body: '' },
+      { method: 'GET', path: '/api/patient/doctor/lookup/{id}', tag: 'Patient', body: '' },
+      { method: 'POST', path: '/api/patient/request-doctor', tag: 'Patient', body: '{\n  "doctor_id": 2\n}' },
+      { method: 'GET', path: '/api/patient/my-requests', tag: 'Patient', body: '' },
+      { method: 'GET', path: '/api/patient/my-doctor', tag: 'Patient', body: '' },
+      { method: 'GET', path: '/api/patient/prescriptions', tag: 'Patient', body: '' },
+      { method: 'GET', path: '/api/patient/appointments/doctors', tag: 'Patient Appointments', body: '' },
+      { method: 'GET', path: '/api/patient/appointments/doctors/{id}/slots', tag: 'Patient Appointments', body: '' },
+      { method: 'POST', path: '/api/patient/appointments', tag: 'Patient Appointments', body: '{\n  "doctor_id": 2,\n  "slot_id": 1\n}' },
+      { method: 'GET', path: '/api/patient/appointments', tag: 'Patient Appointments', body: '' },
+      { method: 'DELETE', path: '/api/patient/appointments/{id}', tag: 'Patient Appointments', body: '' },
+      { method: 'GET', path: '/api/doctor/stats', tag: 'Doctor', body: '' },
+      { method: 'GET', path: '/api/doctor/profile', tag: 'Doctor', body: '' },
+      { method: 'PUT', path: '/api/doctor/profile', tag: 'Doctor', body: '{\n  "display_name": "Dr. Smith",\n  "specialty": "Cardiology"\n}' },
+      { method: 'GET', path: '/api/doctor/requests', tag: 'Doctor', body: '' },
+      { method: 'POST', path: '/api/doctor/requests/{id}/respond', tag: 'Doctor', body: '{\n  "accept": true\n}' },
+      { method: 'GET', path: '/api/doctor/my-patients', tag: 'Doctor', body: '' },
+      { method: 'GET', path: '/api/doctor/patients/{user_id}/prescriptions', tag: 'Doctor', body: '' },
+      { method: 'GET', path: '/api/doctor/appointments', tag: 'Doctor Appointments', body: '' },
+      { method: 'PUT', path: '/api/doctor/appointments/{id}/status', tag: 'Doctor Appointments', body: '{\n  "status": "CONFIRMED"\n}' },
+      { method: 'GET', path: '/api/doctor/appointments/slots', tag: 'Doctor Slots', body: '' },
+      { method: 'POST', path: '/api/doctor/appointments/slots', tag: 'Doctor Slots', body: '{\n  "slot_date": "2026-09-01",\n  "start_time": "09:00",\n  "end_time": "10:00",\n  "max_patients": 5\n}' },
+      { method: 'DELETE', path: '/api/doctor/appointments/slots/{id}', tag: 'Doctor Slots', body: '' },
+      { method: 'POST', path: '/api/hospital/register', tag: 'Hospital', body: '{\n  "name": "City Hospital",\n  "email": "hosp@rxify.com",\n  "password": "pass",\n  "registration_number": "H-101"\n}' },
+      { method: 'POST', path: '/api/hospital/login', tag: 'Hospital', body: 'username=hosp@rxify.com&password=pass' },
+      { method: 'GET', path: '/api/hospital/dashboard', tag: 'Hospital', body: '' },
+      { method: 'GET', path: '/api/hospital/patients/{code}', tag: 'Hospital', body: '' },
+      { method: 'GET', path: '/api/hospital/doctors', tag: 'Hospital', body: '' },
+      { method: 'POST', path: '/api/hospital/doctors', tag: 'Hospital', body: '{\n  "username": "doc_hosp@rxify.com",\n  "password": "pass",\n  "display_name": "Dr. House",\n  "specialty": "Diagnostics"\n}' },
+      { method: 'GET', path: '/api/dispensary/stock', tag: 'Dispensary', body: '' },
+      { method: 'GET', path: '/api/chat/conversations', tag: 'Chat', body: '' },
+      { method: 'GET', path: '/api/chat/messages/{user_id}', tag: 'Chat', body: '' },
+      { method: 'POST', path: '/api/chat/send', tag: 'Chat', body: '{\n  "recipient_id": 2,\n  "content": "Hello Doctor!"\n}' },
+      { method: 'GET', path: '/api/medicine_info/p/{id}', tag: 'Prescriptions', body: '' }
+    ];
+
     window.addEventListener('DOMContentLoaded', () => {
       updateAuthUI();
-      // Auto register/seed default demo credentials if needed
+      renderCatalog();
       seedDefaults();
     });
 
@@ -778,7 +1028,7 @@
       AUTH = { token: null, role: null, user: null, id: null };
       localStorage.clear();
       updateAuthUI();
-      showToast('Logged Out', 'Successfully cleared auth session token.');
+      showToast('Logged Out', 'Cleared session token.');
     }
 
     function copyToken() {
@@ -787,7 +1037,6 @@
       showToast('Token Copied', 'JWT Bearer token copied to clipboard.');
     }
 
-    /* Role Navigation Switcher */
     function switchRoleView(role) {
       document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.view-panel').forEach(panel => panel.style.display = 'none');
@@ -798,16 +1047,16 @@
       const targetView = document.getElementById(`view${role.charAt(0).toUpperCase() + role.slice(1)}`);
       if (targetView) targetView.style.display = 'block';
 
-      // Auto load relevant view data if logged in
       if (AUTH.token) {
         if (role === 'patient') loadPatientProfile();
         else if (role === 'doctor') loadDoctorDashboard();
         else if (role === 'hospital') loadHospitalDashboard();
         else if (role === 'dispensary') loadDispensaryStock();
+        else if (role === 'chat') loadChatConversations();
       }
     }
 
-    /* Unified API Fetch Wrapper with Logging */
+    /* Unified Fetch Wrapper with Automatic Console Dock Logging */
     async function apiFetch(url, options = {}) {
       const startTime = performance.now();
       const headers = options.headers || {};
@@ -833,7 +1082,7 @@
 
         if (!response.ok && !silent) {
           const detail = typeof data === 'object' ? (data.detail || JSON.stringify(data)) : data;
-          showToast(`API Error ${response.status}`, detail);
+          showToast(`API ${response.status}`, detail);
         }
 
         return { ok: response.ok, status: response.status, data };
@@ -845,7 +1094,6 @@
       }
     }
 
-    /* API Inspector Logger */
     function logApiCall(method, url, status, duration, payload) {
       const logEntry = { id: logHistory.length + 1, method, url, status, duration, payload, time: new Date().toLocaleTimeString() };
       logHistory.unshift(logEntry);
@@ -862,7 +1110,7 @@
       }
 
       container.innerHTML = logHistory.map(l => `
-        <div class="log-item" onclick="inspectLog(${l.id})">
+        <div class="log-item" id="logItem-${l.id}" onclick="inspectLog(${l.id})">
           <span class="log-method ${l.method}">${l.method}</span>
           <span class="log-url" title="${l.url}">${l.url}</span>
           <span class="log-status ${l.status >= 200 && l.status < 300 ? 'ok' : 'err'}">${l.status || 'ERR'}</span>
@@ -872,6 +1120,10 @@
     }
 
     function inspectLog(id) {
+      document.querySelectorAll('.log-item').forEach(el => el.classList.remove('selected'));
+      const activeEl = document.getElementById(`logItem-${id}`);
+      if (activeEl) activeEl.classList.add('selected');
+
       const entry = logHistory.find(l => l.id === id);
       if (!entry) return;
       document.getElementById('consoleInspector').textContent = JSON.stringify({
@@ -880,7 +1132,7 @@
         status: entry.status,
         duration: `${entry.duration}ms`,
         time: entry.time,
-        response_payload: entry.payload
+        payload: entry.payload
       }, null, 2);
     }
 
@@ -888,14 +1140,35 @@
       logHistory = [];
       document.getElementById('logCounter').textContent = '0 Requests';
       renderLogs();
-      document.getElementById('consoleInspector').textContent = 'Select a request log on the left to inspect payload JSON.';
+      document.getElementById('consoleInspector').textContent = 'Select a log entry on the left to inspect payload details.';
     }
 
     function toggleConsoleDock() {
       document.getElementById('consoleDock').classList.toggle('collapsed');
     }
 
-    /* Manual Custom Auth */
+    /* Preset Seeding & Auth */
+    async function seedDefaults() {
+      await apiFetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'patient1@rxify.com', password: 'patient123', role: 'PATIENT' }),
+        silent: true
+      });
+      await apiFetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'doctor1@rxify.com', password: 'doctor123', role: 'DOCTOR' }),
+        silent: true
+      });
+      await apiFetch('/api/hospital/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'City Hospital', email: 'hospital1@rxify.com', password: 'hospital123', registration_number: 'HOSP-101' }),
+        silent: true
+      });
+    }
+
     async function handleManualLogin() {
       const username = document.getElementById('authInputUser').value.trim();
       const password = document.getElementById('authInputPass').value.trim();
@@ -903,7 +1176,7 @@
       alertEl.textContent = '';
 
       if (!username || !password) {
-        alertEl.innerHTML = '<span style="color:var(--error);">Please enter username and password.</span>';
+        alertEl.innerHTML = '<span style="color:var(--error);">Enter username and password.</span>';
         return;
       }
 
@@ -923,7 +1196,7 @@
       alertEl.textContent = '';
 
       if (!username || !password) {
-        alertEl.innerHTML = '<span style="color:var(--error);">Please enter username and password.</span>';
+        alertEl.innerHTML = '<span style="color:var(--error);">Enter username and password.</span>';
         return;
       }
 
@@ -948,29 +1221,6 @@
           await doLogin(username, password, role.toLowerCase());
         }
       }
-    }
-
-    /* Preset Accounts Quick Seeding & Login */
-    async function seedDefaults() {
-      // Create quick demo patient, doctor, and hospital silently if missing
-      await apiFetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'patient1@rxify.com', password: 'patient123', role: 'PATIENT' }),
-        silent: true
-      });
-      await apiFetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'doctor1@rxify.com', password: 'doctor123', role: 'DOCTOR' }),
-        silent: true
-      });
-      await apiFetch('/api/hospital/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'City Hospital', email: 'hospital1@rxify.com', password: 'hospital123', registration_number: 'HOSP-101' }),
-        silent: true
-      });
     }
 
     async function quickLoginPreset(type) {
@@ -1035,7 +1285,7 @@
         localStorage.setItem('rx_id', AUTH.id);
 
         updateAuthUI();
-        showToast('Logged In', `Authenticated as ${username} (${AUTH.role})`);
+        showToast('Logged In', `Authenticated as ${username}`);
       }
     }
 
@@ -1046,17 +1296,22 @@
       const res = await apiFetch('/api/patient/me');
       if (res.ok && res.data) {
         document.getElementById('patientCodeBadge').textContent = `Patient Code: ${res.data.patient_code || 'N/A'}`;
-      } else {
-        document.getElementById('patientCodeBadge').textContent = 'Patient Code: Sign in as Patient';
       }
+      loadPatientMyDoctor();
       loadPatientRequests();
       loadPatientPrescriptions();
+      loadPatientAppointments();
+    }
+
+    async function loadPatientMyDoctor() {
+      const res = await apiFetch('/api/patient/my-doctor');
+      document.getElementById('patientMyDoctorBox').textContent = JSON.stringify(res.data, null, 2);
     }
 
     async function uploadPrescription(file) {
       if (!file) return;
       const statusEl = document.getElementById('uploadStatus');
-      statusEl.textContent = 'Uploading file & starting Gemini Vision OCR…';
+      statusEl.textContent = 'Uploading file & triggering Gemini Vision OCR…';
 
       const formData = new FormData();
       formData.append('file', file);
@@ -1082,11 +1337,11 @@
           if (res.data.status === 'done') {
             clearInterval(interval);
             document.getElementById('uploadStatus').textContent = `✅ OCR Done! Rx ID: ${res.data.prescription_id || 'N/A'}`;
-            showToast('OCR Complete', 'Prescription OCR processed successfully!');
+            showToast('OCR Complete', 'Prescription OCR completed!');
             loadPatientPrescriptions();
           } else if (res.data.status === 'error') {
             clearInterval(interval);
-            document.getElementById('uploadStatus').textContent = `❌ OCR Failed: ${res.data.error || 'Unknown error'}`;
+            document.getElementById('uploadStatus').textContent = `❌ OCR Error: ${res.data.error || 'Unknown error'}`;
           }
         }
       }, 2500);
@@ -1094,7 +1349,7 @@
 
     async function lookupPrescriptionById() {
       const id = document.getElementById('rxLookupId').value;
-      if (!id) return showToast('Missing Field', 'Enter a Prescription ID');
+      if (!id) return showToast('Missing Field', 'Enter Prescription ID');
       const res = await apiFetch(`/api/medicine_info/p/${id}`);
       document.getElementById('rxLookupResult').textContent = JSON.stringify(res.data, null, 2);
     }
@@ -1154,15 +1409,85 @@
     }
 
     async function loadPatientPrescriptions() {
-      const res = await apiFetch('/api/patient/my-prescriptions');
+      const res = await apiFetch('/api/patient/prescriptions');
       document.getElementById('patientPrescriptionsContainer').textContent = JSON.stringify(res.data, null, 2);
+    }
+
+    async function loadDoctorsForAppointment() {
+      const res = await apiFetch('/api/patient/appointments/doctors');
+      const select = document.getElementById('patientApptDocSelect');
+      select.innerHTML = '<option value="">Select Doctor...</option>';
+      if (res.ok && Array.isArray(res.data)) {
+        res.data.forEach(d => {
+          select.innerHTML += `<option value="${d.id}">${d.display_name || d.username} (${d.specialty || 'General'})</option>`;
+        });
+      }
+    }
+
+    async function loadDoctorSlotsForPatient(docId) {
+      if (!docId) return;
+      const res = await apiFetch(`/api/patient/appointments/doctors/${docId}/slots`);
+      const row = document.getElementById('patientSlotsRow');
+      const select = document.getElementById('patientSlotSelect');
+      select.innerHTML = '<option value="">Select available slot…</option>';
+      
+      if (res.ok && res.data.slots) {
+        row.style.display = 'flex';
+        res.data.slots.forEach(s => {
+          select.innerHTML += `<option value="${s.id}">${s.slot_date} (${s.start_time} - ${s.end_time})</option>`;
+        });
+      }
+    }
+
+    async function bookAppointmentAsPatient() {
+      const docId = document.getElementById('patientApptDocSelect').value;
+      const slotId = document.getElementById('patientSlotSelect').value;
+      if (!docId || !slotId) return showToast('Missing Fields', 'Select doctor and slot.');
+
+      const res = await apiFetch('/api/patient/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doctor_id: parseInt(docId), slot_id: parseInt(slotId) })
+      });
+
+      if (res.ok) {
+        showToast('Appointment Booked', 'Appointment confirmed successfully!');
+        loadPatientAppointments();
+      }
+    }
+
+    async function loadPatientAppointments() {
+      const res = await apiFetch('/api/patient/appointments');
+      const tbody = document.getElementById('patientApptsTbody');
+      if (res.ok && res.data.appointments) {
+        if (res.data.appointments.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--muted);">No appointments booked</td></tr>';
+          return;
+        }
+        tbody.innerHTML = res.data.appointments.map(a => `
+          <tr>
+            <td>#${a.id}</td>
+            <td><strong>${a.doctor_name || 'Doctor'}</strong></td>
+            <td>${a.slot_date} ${a.start_time}</td>
+            <td><span class="badge badge-info">${a.status}</span></td>
+            <td><button class="btn-xs btn-danger" onclick="cancelPatientAppointment(${a.id})">Cancel</button></td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    async function cancelPatientAppointment(id) {
+      const res = await apiFetch(`/api/patient/appointments/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Cancelled', `Appointment #${id} cancelled.`);
+        loadPatientAppointments();
+      }
     }
 
     /* ════════════════════════════════════════════════════════════════════════
          DOCTOR ACTIONS
     ════════════════════════════════════════════════════════════════════════ */
     async function loadDoctorDashboard() {
-      // Load stats
       const statsRes = await apiFetch('/api/doctor/stats');
       if (statsRes.ok && statsRes.data) {
         document.getElementById('docStatPatients').textContent = statsRes.data.patient_count ?? '0';
@@ -1171,7 +1496,29 @@
         document.getElementById('docStatFollowups').textContent = statsRes.data.upcoming_followups ?? '0';
       }
       loadDoctorRequests();
+      loadDoctorProfile();
+      loadDoctorSlots();
       loadDoctorAppointments();
+      loadDoctorPatients();
+    }
+
+    async function loadDoctorProfile() {
+      const res = await apiFetch('/api/doctor/profile');
+      if (res.ok && res.data) {
+        document.getElementById('docProfileName').value = res.data.display_name || '';
+        document.getElementById('docProfileSpecialty').value = res.data.specialty || '';
+      }
+    }
+
+    async function saveDoctorProfile() {
+      const name = document.getElementById('docProfileName').value;
+      const spec = document.getElementById('docProfileSpecialty').value;
+      const res = await apiFetch('/api/doctor/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: name, specialty: spec })
+      });
+      if (res.ok) showToast('Profile Updated', 'Doctor profile saved!');
     }
 
     async function loadDoctorRequests() {
@@ -1179,14 +1526,13 @@
       const tbody = document.getElementById('docRequestsTbody');
       if (res.ok && res.data.requests) {
         if (res.data.requests.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--muted);">No pending requests</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--muted);">No pending requests</td></tr>';
           return;
         }
         tbody.innerHTML = res.data.requests.map(r => `
           <tr>
             <td><strong>${r.patient_display_name || r.patient_username}</strong></td>
             <td style="color:var(--muted);">${r.patient_username}</td>
-            <td>${r.prescription_count} Rx</td>
             <td>
               <button class="btn-xs" style="background:var(--patient-g); color:var(--patient);" onclick="respondDoctorReq(${r.id}, true)">Accept</button>
               <button class="btn-xs btn-danger" onclick="respondDoctorReq(${r.id}, false)">Reject</button>
@@ -1203,20 +1549,55 @@
         body: JSON.stringify({ accept })
       });
       if (res.ok) {
-        showToast('Request Responded', accept ? 'Accepted patient!' : 'Rejected patient.');
+        showToast('Responded', accept ? 'Accepted request!' : 'Rejected request.');
         loadDoctorDashboard();
       }
     }
 
-    async function saveDoctorProfile() {
-      const name = document.getElementById('docProfileName').value;
-      const spec = document.getElementById('docProfileSpecialty').value;
-      const res = await apiFetch('/api/doctor/profile', {
-        method: 'PUT',
+    async function createDoctorSlot() {
+      const date = document.getElementById('slotDate').value;
+      const start = document.getElementById('slotStartTime').value;
+      const end = document.getElementById('slotEndTime').value;
+      if (!date || !start || !end) return showToast('Missing Fields', 'Set date and start/end time.');
+
+      const res = await apiFetch('/api/doctor/appointments/slots', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: name, specialty: spec })
+        body: JSON.stringify({ slot_date: date, start_time: start, end_time: end, max_patients: 5 })
       });
-      if (res.ok) showToast('Profile Updated', 'Doctor profile saved successfully.');
+
+      if (res.ok) {
+        showToast('Slot Added', 'New availability slot created!');
+        loadDoctorSlots();
+      }
+    }
+
+    async function loadDoctorSlots() {
+      const res = await apiFetch('/api/doctor/appointments/slots');
+      const tbody = document.getElementById('docSlotsTbody');
+      if (res.ok && res.data.slots) {
+        if (res.data.slots.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--muted);">No slots found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = res.data.slots.map(s => `
+          <tr>
+            <td>#${s.id}</td>
+            <td>${s.slot_date}</td>
+            <td>${s.start_time} - ${s.end_time}</td>
+            <td>${s.max_patients || 1}</td>
+            <td><button class="btn-xs btn-danger" onclick="deleteDoctorSlot(${s.id})">Delete</button></td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    async function deleteDoctorSlot(slotId) {
+      const res = await apiFetch(`/api/doctor/appointments/slots/${slotId}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Slot Deleted', `Slot #${slotId} deleted.`);
+        loadDoctorSlots();
+      }
     }
 
     async function loadDoctorAppointments() {
@@ -1229,15 +1610,14 @@
 
       if (res.ok && res.data.appointments) {
         if (res.data.appointments.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted);">No appointments found</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--muted);">No appointments found</td></tr>';
           return;
         }
         tbody.innerHTML = res.data.appointments.map(a => `
           <tr>
             <td>#${a.appointment_id || a.id}</td>
             <td><strong>${a.patient_name || 'Patient'}</strong></td>
-            <td>${a.slot_date}</td>
-            <td>${a.start_time} - ${a.end_time}</td>
+            <td>${a.slot_date} ${a.start_time}</td>
             <td><span class="badge badge-info">${a.status}</span></td>
             <td>
               <select class="input" style="width:auto; padding:0.2rem;" onchange="updateAppointmentStatus(${a.appointment_id || a.id}, this.value)">
@@ -1260,9 +1640,14 @@
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        showToast('Status Updated', `Appointment #${id} updated to ${newStatus}`);
+        showToast('Status Updated', `Appointment #${id} set to ${newStatus}`);
         loadDoctorAppointments();
       }
+    }
+
+    async function loadDoctorPatients() {
+      const res = await apiFetch('/api/doctor/my-patients');
+      document.getElementById('docPatientsContainer').textContent = JSON.stringify(res.data, null, 2);
     }
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -1296,6 +1681,7 @@
         updateAuthUI();
         showToast('Hospital Authenticated', `Logged in as ${AUTH.user}`);
         loadHospitalDashboard();
+        loadHospitalDoctors();
       }
     }
 
@@ -1317,7 +1703,7 @@
 
     async function hospitalLookupPatient() {
       const code = document.getElementById('hospPatientCode').value.trim();
-      if (!code) return showToast('Missing Code', 'Enter patient_code (e.g. RXF-P-XXXXX)');
+      if (!code) return showToast('Missing Code', 'Enter patient_code');
 
       const res = await apiFetch(`/api/hospital/patients/${code}/prescriptions`);
       document.getElementById('hospLookupResult').textContent = JSON.stringify(res.data, null, 2);
@@ -1326,6 +1712,53 @@
     async function loadHospitalDashboard() {
       const res = await apiFetch('/api/hospital/dashboard');
       document.getElementById('hospDashboardContainer').textContent = JSON.stringify(res.data, null, 2);
+    }
+
+    async function loadHospitalDoctors() {
+      const res = await apiFetch('/api/hospital/doctors');
+      const tbody = document.getElementById('hospDoctorsTbody');
+      if (res.ok && Array.isArray(res.data)) {
+        if (res.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--muted);">No doctors added yet</td></tr>';
+          return;
+        }
+        tbody.innerHTML = res.data.map(d => `
+          <tr>
+            <td>#${d.id}</td>
+            <td><strong>${d.display_name || d.username}</strong></td>
+            <td>${d.specialty || 'General'}</td>
+            <td><button class="btn-xs btn-danger" onclick="deleteHospitalDoctor(${d.id})">Remove</button></td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    async function addHospitalDoctor() {
+      const name = document.getElementById('hospNewDocName').value;
+      const email = document.getElementById('hospNewDocEmail').value;
+      const pass = document.getElementById('hospNewDocPass').value;
+      const spec = document.getElementById('hospNewDocSpec').value;
+
+      if (!email || !pass) return showToast('Missing Fields', 'Email and Password required');
+
+      const res = await apiFetch('/api/hospital/doctors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: email, password: pass, display_name: name, specialty: spec })
+      });
+
+      if (res.ok) {
+        showToast('Doctor Added', 'Affiliated doctor created!');
+        loadHospitalDoctors();
+      }
+    }
+
+    async function deleteHospitalDoctor(docId) {
+      const res = await apiFetch(`/api/hospital/doctors/${docId}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Doctor Removed', `Doctor #${docId} unlinked.`);
+        loadHospitalDoctors();
+      }
     }
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -1337,8 +1770,73 @@
     }
 
     /* ════════════════════════════════════════════════════════════════════════
-         RAW API TESTER
+         CHAT ACTIONS
     ════════════════════════════════════════════════════════════════════════ */
+    async function loadChatConversations() {
+      const res = await apiFetch('/api/chat/conversations');
+      document.getElementById('chatConversationsBox').textContent = JSON.stringify(res.data, null, 2);
+    }
+
+    async function loadChatMessages() {
+      const targetId = document.getElementById('chatRecipientId').value;
+      if (!targetId) return showToast('Missing Field', 'Enter User ID');
+      const res = await apiFetch(`/api/chat/messages/${targetId}`);
+      document.getElementById('chatHistoryBox').textContent = JSON.stringify(res.data, null, 2);
+    }
+
+    async function sendChatMessage() {
+      const targetId = document.getElementById('chatSendTargetId').value;
+      const text = document.getElementById('chatSendMessageText').value.trim();
+
+      if (!targetId || !text) return showToast('Missing Fields', 'Recipient ID and Message required.');
+
+      const res = await apiFetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_id: parseInt(targetId), content: text })
+      });
+
+      if (res.ok) {
+        showToast('Message Sent', 'Direct message delivered!');
+        document.getElementById('chatSendMessageText').value = '';
+        loadChatMessages();
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+         CATALOG & RAW API TESTER
+    ════════════════════════════════════════════════════════════════════════ */
+    function renderCatalog(filterText = '') {
+      const grid = document.getElementById('catalogGrid');
+      const lower = filterText.toLowerCase();
+
+      const items = ALL_ENDPOINTS.filter(e => 
+        e.path.toLowerCase().includes(lower) || e.tag.toLowerCase().includes(lower) || e.method.toLowerCase().includes(lower)
+      );
+
+      grid.innerHTML = items.map(e => `
+        <div class="catalog-item" onclick="loadCatalogIntoRaw('${e.method}', '${e.path}', \`${e.body.replace(/`/g, '\\`')}\`)">
+          <div>
+            <span class="badge badge-${e.method.toLowerCase()}">${e.method}</span>
+            <span style="font-family:var(--font-m); font-weight:600; margin-left:0.4rem; color:#fff;">${e.path}</span>
+          </div>
+          <span class="badge badge-info">${e.tag}</span>
+        </div>
+      `).join('');
+    }
+
+    function filterCatalog(val) {
+      renderCatalog(val);
+    }
+
+    function loadCatalogIntoRaw(method, path, body) {
+      switchRoleView('raw');
+      document.getElementById('rawMethod').value = method;
+      document.getElementById('rawPath').value = path;
+      document.getElementById('rawBody').value = body;
+      showToast('Loaded into Tester', `Pre-filled ${method} ${path}`);
+    }
+
     async function executeRawApi() {
       const method = document.getElementById('rawMethod').value;
       const path = document.getElementById('rawPath').value.trim();
@@ -1346,11 +1844,17 @@
 
       let options = { method };
       if (bodyStr && (method === 'POST' || method === 'PUT')) {
-        try {
-          options.body = JSON.stringify(JSON.parse(bodyStr));
-          options.headers = { 'Content-Type': 'application/json' };
-        } catch (e) {
-          return showToast('Invalid JSON', 'Please enter valid JSON in the body field.');
+        if (bodyStr.includes('=')) {
+          // Form urlencoded
+          options.body = bodyStr;
+          options.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        } else {
+          try {
+            options.body = JSON.stringify(JSON.parse(bodyStr));
+            options.headers = { 'Content-Type': 'application/json' };
+          } catch (e) {
+            options.body = bodyStr;
+          }
         }
       }
 

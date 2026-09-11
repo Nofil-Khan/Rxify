@@ -4,6 +4,7 @@ import { Eye, EyeOff, Stethoscope, User, Lock, LogIn, UserPlus, ArrowRight, Acti
 import { login, register, ApiError } from '../lib/api';
 import { useAuthStore } from '../lib/auth';
 import type { Role } from '../lib/api';
+import { PortalSwitcher } from '../components/common/PortalSwitcher';
 
 type Tab = 'login' | 'register';
 
@@ -54,7 +55,15 @@ export default function Auth() {
     setLoginLoading(true);
     try {
       const res = await login(loginUsername.trim(), loginPassword);
-      setAuth(res.access_token, res.role, loginUsername.trim());
+      setAuth(res.access_token, res.role, loginUsername.trim(), {
+        userId: res.user_id,
+        displayName: res.display_name,
+        patientId: res.patient_id,
+        patientCode: res.patient_code,
+        doctorId: res.doctor_id,
+        doctorCode: res.doctor_code,
+        dispensaryId: res.dispensary_id,
+      });
       navigate({ to: res.role === 'doctor' ? '/doctor' : '/patient' });
     } catch (err) {
       setLoginError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
@@ -107,6 +116,9 @@ export default function Auth() {
         </div>
         <span>Rxify</span>
       </a>
+
+      {/* Cross-Portal Switcher */}
+      <PortalSwitcher current="main" />
 
       {/* Card */}
       <div className="auth-card">

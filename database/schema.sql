@@ -57,7 +57,18 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-    CREATE TYPE dispensary_status AS ENUM ('PENDING', 'AVAILABLE', 'OUT_OF_STOCK', 'PARTIAL');
+    CREATE TYPE dispensary_status AS ENUM (
+        'PENDING', 'PROCESSING', 'READY',
+        'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'DISPENSED', 'CANCELLED'
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    CREATE TYPE inventory_txn_type AS ENUM (
+        'STOCK_ADDED', 'STOCK_REMOVED', 'MEDICINE_DISPENSED',
+        'MEDICINE_RESERVED', 'RESERVATION_CANCELLED',
+        'EXPIRED', 'DAMAGED', 'STOCK_ADJUSTMENT'
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- =============================================================================
@@ -100,6 +111,23 @@ CREATE TABLE IF NOT EXISTS doctor (
     license_number      TEXT UNIQUE,
     experience_years    INTEGER,
     about               TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3b. dispensary — authenticated org entity (like hospital, NOT a user profile)
+-- Each dispensary belongs to a hospital and manages its own inventory + requests.
+CREATE TABLE IF NOT EXISTS dispensary (
+    dispensary_id       SERIAL PRIMARY KEY,
+    hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    name                TEXT NOT NULL DEFAULT 'Main Dispensary',
+    email               TEXT UNIQUE NOT NULL,
+    password_hash       TEXT NOT NULL,
+    phone               TEXT,
+    location            TEXT,           -- e.g. "Ground Floor, Block A"
+    operating_hours     TEXT,           -- e.g. "08:00-20:00 daily"
+    avg_prep_minutes    INTEGER NOT NULL DEFAULT 15,
+    status              TEXT NOT NULL DEFAULT 'ACTIVE',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -202,27 +230,61 @@ CREATE TABLE IF NOT EXISTS current_medication (
 -- =============================================================================
 
 -- 11. inventory_dispensary_stock
+--     Owned by a dispensary. available_quantity - reserved_quantity = free stock.
 CREATE TABLE IF NOT EXISTS inventory_dispensary_stock (
     inventory_id        SERIAL PRIMARY KEY,
+    dispensary_id       INTEGER NOT NULL REFERENCES dispensary(dispensary_id) ON DELETE CASCADE,
     medicine_id         INTEGER NOT NULL REFERENCES medicine(medicine_id) ON DELETE CASCADE,
-    clinic_id           INTEGER NOT NULL REFERENCES clinic_hospital(clinic_id) ON DELETE CASCADE,
-    available_quantity  INTEGER NOT NULL DEFAULT 0,
+    available_quantity  INTEGER NOT NULL DEFAULT 0 CHECK (available_quantity >= 0),
+    reserved_quantity   INTEGER NOT NULL DEFAULT 0 CHECK (reserved_quantity >= 0),
+    reorder_level       INTEGER NOT NULL DEFAULT 10,
     unit                TEXT,
-    last_updated        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (medicine_id, clinic_id)
+    UNIQUE (dispensary_id, medicine_id)
 );
 
--- 12. dispensary_request
+-- 12. dispensary_request — ONE per prescription
 CREATE TABLE IF NOT EXISTS dispensary_request (
-    request_id                  SERIAL PRIMARY KEY,
+    request_id          SERIAL PRIMARY KEY,
+    prescription_id     INTEGER NOT NULL REFERENCES prescription(prescription_id) ON DELETE CASCADE,
+    dispensary_id       INTEGER NOT NULL REFERENCES dispensary(dispensary_id),
+    patient_id          INTEGER NOT NULL REFERENCES patient(patient_id),
+    status              dispensary_status NOT NULL DEFAULT 'PENDING',
+    estimated_ready_at  TIMESTAMPTZ,
+    ready_at            TIMESTAMPTZ,
+    dispensed_at        TIMESTAMPTZ,
+    notes               TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (prescription_id, dispensary_id)  -- one request per prescription per dispensary
+);
+
+-- 13. dispensary_request_item — ONE per prescribed medicine
+CREATE TABLE IF NOT EXISTS dispensary_request_item (
+    item_id                     SERIAL PRIMARY KEY,
+    request_id                  INTEGER NOT NULL REFERENCES dispensary_request(request_id) ON DELETE CASCADE,
     prescription_medicine_id    INTEGER NOT NULL REFERENCES prescription_medicine(prescription_medicine_id),
-    clinic_id                   INTEGER NOT NULL REFERENCES clinic_hospital(clinic_id),
-    requested_quantity          INTEGER NOT NULL DEFAULT 1,
-    status                      dispensary_status NOT NULL DEFAULT 'PENDING',
-    expected_time_minutes       INTEGER,
-    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    medicine_id                 INTEGER REFERENCES medicine(medicine_id),
+    required_quantity           INTEGER NOT NULL DEFAULT 1,
+    dispensed_quantity          INTEGER,
+    availability_status         TEXT NOT NULL DEFAULT 'CHECKING',  -- AVAILABLE / PARTIAL / UNAVAILABLE
+    reserved                    BOOLEAN NOT NULL DEFAULT FALSE,
+    notes                       TEXT,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 14. inventory_transaction — audit trail for every stock movement
+CREATE TABLE IF NOT EXISTS inventory_transaction (
+    txn_id          SERIAL PRIMARY KEY,
+    inventory_id    INTEGER NOT NULL REFERENCES inventory_dispensary_stock(inventory_id),
+    dispensary_id   INTEGER NOT NULL REFERENCES dispensary(dispensary_id),
+    medicine_id     INTEGER NOT NULL REFERENCES medicine(medicine_id),
+    txn_type        inventory_txn_type NOT NULL,
+    quantity        INTEGER NOT NULL CHECK (quantity > 0),  -- always positive; txn_type describes direction
+    reference_id    INTEGER,   -- request_id or other entity
+    notes           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- =============================================================================
@@ -371,17 +433,28 @@ CREATE TABLE IF NOT EXISTS patient_share_tokens (
 -- INDEXES
 -- =============================================================================
 
-CREATE INDEX IF NOT EXISTS idx_patient_user_id         ON patient(user_id);
-CREATE INDEX IF NOT EXISTS idx_doctor_user_id          ON doctor(user_id);
-CREATE INDEX IF NOT EXISTS idx_prescription_patient_id ON prescription(patient_id);
-CREATE INDEX IF NOT EXISTS idx_prescription_doctor_id  ON prescription(doctor_id);
-CREATE INDEX IF NOT EXISTS idx_prx_med_prescription_id ON prescription_medicine(prescription_id);
-CREATE INDEX IF NOT EXISTS idx_patient_doctor_ids      ON patient_doctor(patient_id, doctor_id);
-CREATE INDEX IF NOT EXISTS idx_chat_msg_conv_id        ON chat_message(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_chat_msg_sender_id      ON chat_message(sender_id);
-CREATE INDEX IF NOT EXISTS idx_share_token_token       ON patient_share_tokens(token);
-CREATE INDEX IF NOT EXISTS idx_notification_user_id    ON notification(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_user_id       ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_patient_user_id              ON patient(user_id);
+CREATE INDEX IF NOT EXISTS idx_doctor_user_id               ON doctor(user_id);
+CREATE INDEX IF NOT EXISTS idx_dispensary_hospital_id       ON dispensary(hospital_id);
+CREATE INDEX IF NOT EXISTS idx_dispensary_email             ON dispensary(email);
+CREATE INDEX IF NOT EXISTS idx_prescription_patient_id      ON prescription(patient_id);
+CREATE INDEX IF NOT EXISTS idx_prescription_doctor_id       ON prescription(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_prx_med_prescription_id      ON prescription_medicine(prescription_id);
+CREATE INDEX IF NOT EXISTS idx_patient_doctor_ids           ON patient_doctor(patient_id, doctor_id);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_conv_id             ON chat_message(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_sender_id           ON chat_message(sender_id);
+CREATE INDEX IF NOT EXISTS idx_share_token_token            ON patient_share_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_notification_user_id         ON notification(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user_id            ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_dispensary_id      ON inventory_dispensary_stock(dispensary_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_medicine_id        ON inventory_dispensary_stock(medicine_id);
+CREATE INDEX IF NOT EXISTS idx_disp_req_dispensary_id       ON dispensary_request(dispensary_id);
+CREATE INDEX IF NOT EXISTS idx_disp_req_prescription_id     ON dispensary_request(prescription_id);
+CREATE INDEX IF NOT EXISTS idx_disp_req_status              ON dispensary_request(status);
+CREATE INDEX IF NOT EXISTS idx_disp_req_patient_id          ON dispensary_request(patient_id);
+CREATE INDEX IF NOT EXISTS idx_disp_req_item_request_id     ON dispensary_request_item(request_id);
+CREATE INDEX IF NOT EXISTS idx_inv_txn_dispensary_id        ON inventory_transaction(dispensary_id);
+CREATE INDEX IF NOT EXISTS idx_inv_txn_inventory_id         ON inventory_transaction(inventory_id);
 
 -- =============================================================================
 -- HOSPITAL MODULE
@@ -445,7 +518,21 @@ CREATE TRIGGER trg_generate_patient_code
     FOR EACH ROW
     EXECUTE FUNCTION generate_patient_code();
 
+-- Hospital ↔ Doctor affiliation (hospital org account links to doctor profiles)
+-- Hospital is the primary slot manager; doctors have override rights.
+CREATE TABLE IF NOT EXISTS hospital_doctor (
+    hospital_doctor_id  SERIAL PRIMARY KEY,
+    hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    doctor_id           INTEGER NOT NULL REFERENCES doctor(doctor_id)     ON DELETE CASCADE,
+    department          TEXT,           -- e.g. "Cardiology", "Orthopedics"
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    joined_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (hospital_id, doctor_id)
+);
+
 -- Hospital indexes
 CREATE INDEX IF NOT EXISTS idx_hospital_email          ON hospital(email);
 CREATE INDEX IF NOT EXISTS idx_patient_code            ON patient(patient_code);
 CREATE INDEX IF NOT EXISTS idx_audit_log_hospital_id   ON audit_log(hospital_id);
+CREATE INDEX IF NOT EXISTS idx_hospital_doctor_h       ON hospital_doctor(hospital_id);
+CREATE INDEX IF NOT EXISTS idx_hospital_doctor_d       ON hospital_doctor(doctor_id);
