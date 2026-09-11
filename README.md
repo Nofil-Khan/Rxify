@@ -25,6 +25,7 @@ Medical prescriptions and health records remain one of the most critical yet fra
 ### 💡 The Rxify Solution
 
 **Rxify** bridges these gaps by providing an intelligent, unified digital prescription and hospital ecosystem:
+
 - **Multimodal AI OCR**: Uses Google Gemini Vision to extract medicine names, dosages, durations, instructions, and doctor metadata from uploaded images of handwritten and printed prescriptions.
 - **Role-Based Portals**: Dedicated, secure environments for **Patients**, **Doctors**, **Hospitals**, and **Dispensaries**.
 - **Instant QR Verification**: Patients can generate encrypted time-bound QR tokens or share access codes for instant doctor lookup or pharmacy fulfillment without leaking sensitive credentials.
@@ -39,6 +40,7 @@ Follow this guide to get the full stack (FastAPI backend + Vite React frontend +
 ### 🛠 Prerequisites
 
 Make sure you have installed:
+
 - **Python 3.12+** (or Anaconda / Miniconda)
 - **Node.js 18+** & **npm**
 - **PostgreSQL 14+** (running locally or a cloud instance like Supabase / Neon)
@@ -61,12 +63,14 @@ cd Rxify
 #### 1. Set Up Virtual Environment
 
 Using **Conda**:
+
 ```bash
 conda create -n py312 python=3.12 -y
 conda activate py312
 ```
 
 Or using **venv**:
+
 ```bash
 python -m venv .venv
 
@@ -114,11 +118,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 #### 4. Prepare the Database
 
 Create the PostgreSQL database:
+
 ```bash
 psql -U postgres -c "CREATE DATABASE rxify;"
 ```
 
 Apply the database schema and optional seed data:
+
 ```bash
 # Apply initial tables and relations
 psql -U postgres -d rxify -f database/schema.sql
@@ -127,11 +133,12 @@ psql -U postgres -d rxify -f database/schema.sql
 psql -U postgres -d rxify -f database/seed.sql
 ```
 
-*(Note: If running against a fresh DB, `database/db.py` will also attempt auto-migration upon application startup).*
+_(Note: If running against a fresh DB, `database/db.py` will also attempt auto-migration upon application startup)._
 
 #### 5. Verify Backend Routes
 
 Run the route verification script to check endpoint registrations:
+
 ```bash
 python check_routes.py
 ```
@@ -179,12 +186,12 @@ The Vite dev server will start at:
 
 Once both servers are running, access the portal switcher or direct URLs:
 
-| Portal | URL Route | Target Users | Key Capabilities |
-| :--- | :--- | :--- | :--- |
-| **Patient Portal** | `/` or `/auth` | Patients | View prescription history, upload Rx images for OCR, schedule appointments, generate temporary QR tokens |
-| **Doctor Dashboard** | `/doctor/dashboard` | Doctors & Specialists | Access patient records via QR/token, view OCR extractions, issue digital prescriptions, manage appointment slots |
-| **Hospital Admin** | `/hospital/auth` | Hospital Admins | Register doctors, oversee departments, manage hospital-affiliated dispensaries, inspect appointments |
-| **Dispensary Portal**| `/dispensary/auth` | Pharmacists & Chemists | Scan patient QR codes, verify active prescriptions, dispense medications, log inventory status |
+| Portal                | URL Route           | Target Users           | Key Capabilities                                                                                                 |
+| :-------------------- | :------------------ | :--------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| **Patient Portal**    | `/` or `/auth`      | Patients               | View prescription history, upload Rx images for OCR, schedule appointments, generate temporary QR tokens         |
+| **Doctor Dashboard**  | `/doctor/dashboard` | Doctors & Specialists  | Access patient records via QR/token, view OCR extractions, issue digital prescriptions, manage appointment slots |
+| **Hospital Admin**    | `/hospital/auth`    | Hospital Admins        | Register doctors, oversee departments, manage hospital-affiliated dispensaries, inspect appointments             |
+| **Dispensary Portal** | `/dispensary/auth`  | Pharmacists & Chemists | Scan patient QR codes, verify active prescriptions, dispense medications, log inventory status                   |
 
 ---
 
@@ -250,12 +257,15 @@ Rxify/
 ## 🧪 Testing & Diagnostics
 
 ### Run Route Checks
+
 Verify that all FastAPI endpoints and routers mount without errors:
+
 ```bash
 python check_routes.py
 ```
 
 ### Run Unit/Integration Tests
+
 ```bash
 pytest
 ```
@@ -272,4 +282,4 @@ pytest
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the GREAT NOFIL License. DO NOT USE THIS CODE OTHERWISE ACTIONS WILL BE TAKEN TOWARDS YOU (JK)
