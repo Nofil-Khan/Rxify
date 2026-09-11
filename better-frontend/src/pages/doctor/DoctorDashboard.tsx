@@ -31,7 +31,7 @@ const NAV_ITEMS: { id: DoctorTab; label: string; icon: React.ReactNode; desc: st
 ];
 
 export default function DoctorDashboard() {
-  const { username, displayName, doctorId, doctorCode, updateProfileData, clearAuth } = useAuthStore();
+  const { username, displayName, doctorId, doctorCode, updateProfileData, clearAuth, isAuthenticated, role } = useAuthStore();
   const navigate = useNavigate();
   const [tab, setTab]         = useState<DoctorTab>('overview');
   const [dark, setDark]       = useState(() => localStorage.getItem('rxify-theme') === 'dark');
@@ -39,8 +39,26 @@ export default function DoctorDashboard() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
 
+  /* ── Auth & Role Guard ── */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate({ to: '/login' });
+      return;
+    }
+    const normalizedRole = role?.toLowerCase();
+    if (normalizedRole === 'patient') {
+      navigate({ to: '/patient' });
+      return;
+    }
+    if (normalizedRole === 'dispensary') {
+      navigate({ to: '/dispensary' });
+      return;
+    }
+  }, [isAuthenticated, role, navigate]);
+
   /* ── Sync Doctor Profile ── */
   useEffect(() => {
+    if (role && role.toLowerCase() !== 'doctor') return;
     getDoctorProfile()
       .then((p: DoctorProfile) => {
         if (p && p.id) {
@@ -52,7 +70,7 @@ export default function DoctorDashboard() {
         }
       })
       .catch(() => {});
-  }, [updateProfileData]);
+  }, [updateProfileData, role]);
 
   /* Sync Theme */
   useEffect(() => {

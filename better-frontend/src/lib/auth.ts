@@ -17,7 +17,7 @@ interface AuthState {
 
   setAuth: (
     token: string,
-    role: Role,
+    role: Role | string,
     username: string,
     extra?: {
       userId?: number | null;
@@ -75,9 +75,10 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (token, role, username, extra) => {
         localStorage.setItem('rxify_token', token);
         const userId = extra?.userId ?? decodeJwtUid(token);
+        const normalizedRole = (role ? (role.toLowerCase() as Role) : null);
         set({
           token,
-          role,
+          role: normalizedRole,
           username,
           displayName: extra?.displayName ?? null,
           userId,
@@ -121,7 +122,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'rxify-auth',
       partialize: (state) => ({
         token: state.token,
-        role: state.role,
+        role: state.role ? (state.role.toLowerCase() as Role) : null,
         username: state.username,
         displayName: state.displayName,
         userId: state.userId,
@@ -132,6 +133,11 @@ export const useAuthStore = create<AuthState>()(
         dispensaryId: state.dispensaryId,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state && state.role) {
+          state.role = (state.role as string).toLowerCase() as Role;
+        }
+      },
     },
   ),
 );

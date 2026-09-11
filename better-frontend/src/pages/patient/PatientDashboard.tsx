@@ -31,7 +31,7 @@ import { fetchPatientStats } from '../../lib/patientApi';
 import { Camera, QrCode as QrIcon, ShieldCheck } from 'lucide-react';
 
 export default function PatientDashboard() {
-  const { username, displayName, patientCode, patientId, updateProfileData, clearAuth } = useAuthStore();
+  const { username, displayName, patientCode, patientId, updateProfileData, clearAuth, isAuthenticated, role } = useAuthStore();
   const navigate = useNavigate();
   const [tab, setTab]         = useState<DashTab>('overview');
   const [dark, setDark]       = useState(() => localStorage.getItem('rxify-theme') === 'dark');
@@ -39,8 +39,26 @@ export default function PatientDashboard() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
 
+  /* ── Auth & Role Guard ── */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate({ to: '/login' });
+      return;
+    }
+    const normalizedRole = role?.toLowerCase();
+    if (normalizedRole === 'doctor') {
+      navigate({ to: '/doctor' });
+      return;
+    }
+    if (normalizedRole === 'dispensary') {
+      navigate({ to: '/dispensary' });
+      return;
+    }
+  }, [isAuthenticated, role, navigate]);
+
   /* ── Sync patient_code and profile from stats ── */
   useEffect(() => {
+    if (role && role.toLowerCase() !== 'patient') return;
     fetchPatientStats()
       .then((stats) => {
         if (stats.patient_code || stats.patient_id) {
@@ -52,7 +70,7 @@ export default function PatientDashboard() {
         }
       })
       .catch(() => {});
-  }, [updateProfileData]);
+  }, [updateProfileData, role]);
 
   /* ── Apply theme ─────────────────────────────────────────────────────────── */
   useEffect(() => {

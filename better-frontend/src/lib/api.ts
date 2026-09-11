@@ -7,7 +7,7 @@ export type Role = 'patient' | 'doctor' | 'dispensary';
 export interface LoginResponse {
   access_token: string;
   token_type: string;
-  role: Role;
+  role: Role | string;
   user_id?: number;
   display_name?: string | null;
   doctor_id?: number | null;
@@ -19,7 +19,7 @@ export interface LoginResponse {
 
 export interface RegisterResponse {
   message: string;
-  role: Role;
+  role: Role | string;
 }
 
 export class ApiError extends Error {

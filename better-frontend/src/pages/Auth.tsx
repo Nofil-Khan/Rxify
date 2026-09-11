@@ -8,6 +8,13 @@ import { PortalSwitcher } from '../components/common/PortalSwitcher';
 
 type Tab = 'login' | 'register';
 
+function getRoleDashboard(role?: string | null) {
+  const normalized = role?.toLowerCase();
+  if (normalized === 'doctor') return '/doctor';
+  if (normalized === 'dispensary') return '/dispensary';
+  return '/patient';
+}
+
 export default function Auth() {
   const navigate = useNavigate();
   const { setAuth, isAuthenticated, role } = useAuthStore();
@@ -15,7 +22,7 @@ export default function Auth() {
   /* Redirect if already logged in */
   useEffect(() => {
     if (isAuthenticated) {
-      navigate({ to: role === 'doctor' ? '/doctor' : '/patient' });
+      navigate({ to: getRoleDashboard(role) });
     }
   }, [isAuthenticated, role, navigate]);
 
@@ -55,7 +62,8 @@ export default function Auth() {
     setLoginLoading(true);
     try {
       const res = await login(loginUsername.trim(), loginPassword);
-      setAuth(res.access_token, res.role, loginUsername.trim(), {
+      const userRole = (res.role ? String(res.role).toLowerCase() : 'patient') as Role;
+      setAuth(res.access_token, userRole, loginUsername.trim(), {
         userId: res.user_id,
         displayName: res.display_name,
         patientId: res.patient_id,
@@ -64,7 +72,7 @@ export default function Auth() {
         doctorCode: res.doctor_code,
         dispensaryId: res.dispensary_id,
       });
-      navigate({ to: res.role === 'doctor' ? '/doctor' : '/patient' });
+      navigate({ to: getRoleDashboard(userRole) });
     } catch (err) {
       setLoginError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
     } finally {
