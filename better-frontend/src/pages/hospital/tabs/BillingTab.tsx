@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
   DollarSign, FileText, CheckCircle2, Clock, AlertTriangle,
-  Search, Filter, Plus, Download, CreditCard, ShieldCheck
+  Search, Filter, Plus, Download, CreditCard, ShieldCheck,
+  Receipt
 } from 'lucide-react';
+import { useHospitalAuthStore } from '../../../lib/hospitalAuth';
 
 interface Bill {
   id: string;
@@ -17,7 +19,7 @@ interface Bill {
   status: 'PAID' | 'INSURANCE_PENDING' | 'CLAIM_APPROVED' | 'OVERDUE';
 }
 
-const BILLS_DATA: Bill[] = [
+const DEMO_BILLS_DATA: Bill[] = [
   { id: 'INV-88910', patient: 'Eleanor Vance', mrn: 'RXF-P-8821', service: 'Coronary Artery Bypass + ICU Stay (3d)', date: 'Sep 10, 2026', total: 24500, insuranceCovered: 22000, patientDue: 2500, insurer: 'BlueCross Highmark', status: 'INSURANCE_PENDING' },
   { id: 'INV-88911', patient: 'Liam O’Connor', mrn: 'RXF-P-3319', service: 'ER Closed Reduction + Splinting', date: 'Sep 12, 2026', total: 1850, insuranceCovered: 1600, patientDue: 250, insurer: 'Aetna Health Advantage', status: 'PAID' },
   { id: 'INV-88912', patient: 'Sofia Reyes', mrn: 'RXF-P-9022', service: 'Inpatient General Care + IV Therapy', date: 'Sep 11, 2026', total: 4200, insuranceCovered: 3800, patientDue: 400, insurer: 'UnitedHealthcare', status: 'CLAIM_APPROVED' },
@@ -27,7 +29,10 @@ const BILLS_DATA: Bill[] = [
 ];
 
 export default function BillingTab() {
-  const [bills] = useState<Bill[]>(BILLS_DATA);
+  const { hospitalId } = useHospitalAuthStore();
+  const isDemo = hospitalId === 1;
+
+  const [bills] = useState<Bill[]>(isDemo ? DEMO_BILLS_DATA : []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -41,6 +46,10 @@ export default function BillingTab() {
     return matchSearch && matchStatus;
   });
 
+  const totalRevenue = isDemo ? 348920 : 0;
+  const pendingInsurance = isDemo ? 48290 : 0;
+  const patientDue = isDemo ? 8450 : 0;
+
   return (
     <div>
       <div className="hosp-section-head">
@@ -52,7 +61,7 @@ export default function BillingTab() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="hosp-btn-secondary">
+          <button className="hosp-btn-secondary" disabled={!isDemo || bills.length === 0}>
             <Download size={14} />
             <span>Export Statement (CSV)</span>
           </button>
@@ -67,23 +76,35 @@ export default function BillingTab() {
       <div className="hosp-kpi-grid" style={{ marginBottom: '1.25rem' }}>
         <div className="hosp-stat-card">
           <span className="hosp-stat-label">Total Revenue This Month</span>
-          <div className="hosp-stat-number">$348,920</div>
-          <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>+6.4% vs last billing cycle</span>
+          <div className="hosp-stat-number">${totalRevenue.toLocaleString()}</div>
+          <span style={{ fontSize: '0.72rem', color: isDemo ? '#059669' : '#64748b', fontWeight: isDemo ? 600 : 400 }}>
+            {isDemo ? '+6.4% vs last billing cycle' : 'No payments settled yet'}
+          </span>
         </div>
         <div className="hosp-stat-card">
-          <span className="hosp-stat-label">Pending Insurance Adjudication</span>
-          <div className="hosp-stat-number" style={{ color: '#d97706' }}>$48,290</div>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>14 commercial claims in queue</span>
+          <span className="hosp-stat-label">Pending Insurance Claims</span>
+          <div className="hosp-stat-number" style={{ color: isDemo ? '#d97706' : 'var(--hosp-text-main)' }}>
+            ${pendingInsurance.toLocaleString()}
+          </div>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {isDemo ? '14 commercial claims in queue' : '0 claims pending'}
+          </span>
         </div>
         <div className="hosp-stat-card">
           <span className="hosp-stat-label">Patient Copay & Coinsurance Due</span>
-          <div className="hosp-stat-number" style={{ color: '#0284c7' }}>$8,450</div>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Average collection rate 94.2%</span>
+          <div className="hosp-stat-number" style={{ color: isDemo ? '#0284c7' : 'var(--hosp-text-main)' }}>
+            ${patientDue.toLocaleString()}
+          </div>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {isDemo ? 'Average collection rate 94.2%' : '0 outstanding balance'}
+          </span>
         </div>
         <div className="hosp-stat-card">
           <span className="hosp-stat-label">Clean Claim Pass Rate</span>
-          <div className="hosp-stat-number" style={{ color: '#059669' }}>97.8%</div>
-          <span style={{ fontSize: '0.72rem', color: '#059669' }}>Electronic 837 claim batching</span>
+          <div className="hosp-stat-number" style={{ color: isDemo ? '#059669' : 'var(--hosp-text-main)' }}>
+            {isDemo ? '97.8%' : '100%'}
+          </div>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Electronic 837 claim batching</span>
         </div>
       </div>
 
@@ -131,53 +152,67 @@ export default function BillingTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((b) => (
-                <tr key={b.id}>
-                  <td>
-                    <div style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 600, color: 'var(--hosp-text-main)' }}>
-                      {b.id}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{b.date}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: 'var(--hosp-text-main)' }}>{b.patient}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'var(--font-hosp-mono)' }}>{b.mrn}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--hosp-text-secondary)', maxWidth: '240px' }}>
-                      {b.service}
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>{b.insurer}</span>
-                  </td>
-                  <td>
-                    <strong style={{ fontFamily: 'var(--font-hosp-mono)', color: 'var(--hosp-text-main)' }}>
-                      ${b.total.toLocaleString()}
-                    </strong>
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '0.75rem', color: '#059669' }}>Ins: ${b.insuranceCovered.toLocaleString()}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Due: ${b.patientDue.toLocaleString()}</div>
-                  </td>
-                  <td>
-                    {b.status === 'PAID' && (
-                      <span className="hosp-badge hosp-badge--green">Paid in Full</span>
-                    )}
-                    {b.status === 'CLAIM_APPROVED' && (
-                      <span className="hosp-badge hosp-badge--blue">Claim Approved</span>
-                    )}
-                    {b.status === 'INSURANCE_PENDING' && (
-                      <span className="hosp-badge hosp-badge--amber">Pending Review</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
-                      View Claim
-                    </button>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
+                    <Receipt size={36} style={{ margin: '0 auto 0.75rem auto', color: '#94a3b8', opacity: 0.6 }} />
+                    <h4 style={{ margin: 0, fontWeight: 600, color: 'var(--hosp-text-main)' }}>
+                      No Billing Invoices or Claims Yet
+                    </h4>
+                    <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                      Patient billing records and insurance claims will appear here as consultations and admissions take place.
+                    </p>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((b) => (
+                  <tr key={b.id}>
+                    <td>
+                      <div style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 600, color: 'var(--hosp-text-main)' }}>
+                        {b.id}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{b.date}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--hosp-text-main)' }}>{b.patient}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'var(--font-hosp-mono)' }}>{b.mrn}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--hosp-text-secondary)', maxWidth: '240px' }}>
+                        {b.service}
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>{b.insurer}</span>
+                    </td>
+                    <td>
+                      <strong style={{ fontFamily: 'var(--font-hosp-mono)', color: 'var(--hosp-text-main)' }}>
+                        ${b.total.toLocaleString()}
+                      </strong>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.75rem', color: '#059669' }}>Ins: ${b.insuranceCovered.toLocaleString()}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Due: ${b.patientDue.toLocaleString()}</div>
+                    </td>
+                    <td>
+                      {b.status === 'PAID' && (
+                        <span className="hosp-badge hosp-badge--green">Paid in Full</span>
+                      )}
+                      {b.status === 'CLAIM_APPROVED' && (
+                        <span className="hosp-badge hosp-badge--blue">Claim Approved</span>
+                      )}
+                      {b.status === 'INSURANCE_PENDING' && (
+                        <span className="hosp-badge hosp-badge--amber">Pending Review</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
+                        View Claim
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

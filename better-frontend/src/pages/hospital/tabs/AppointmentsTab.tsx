@@ -29,8 +29,13 @@ const INITIAL_APPOINTMENTS: Appointment[] = [
   { id: 'APT-2008', time: '11:45 AM', patient: 'Claire Dunphy', mrn: 'RXF-P-5501', doctor: 'Dr. Emily Rodriguez', department: 'Internal Medicine', room: 'Room 108', type: 'Thyroid Ultrasound', status: 'SCHEDULED', phone: '+1 (555) 882-3310', notes: 'Thyroid nodule biopsy result consultation' },
 ];
 
+import { useHospitalAuthStore } from '../../../lib/hospitalAuth';
+
 export default function AppointmentsTab() {
-  const [list, setList] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
+  const { hospitalId } = useHospitalAuthStore();
+  const isDemo = hospitalId === 1;
+
+  const [list, setList] = useState<Appointment[]>(isDemo ? INITIAL_APPOINTMENTS : []);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -140,8 +145,12 @@ export default function AppointmentsTab() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
-                    No appointments match the selected filters.
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
+                    <Calendar size={36} style={{ margin: '0 auto 0.75rem auto', color: '#94a3b8', opacity: 0.6 }} />
+                    <h4 style={{ margin: 0, fontWeight: 600, color: 'var(--hosp-text-main)' }}>No Scheduled Appointments</h4>
+                    <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                      Appointments booked by patients or doctors affiliated with this hospital will be scheduled and displayed here.
+                    </p>
                   </td>
                 </tr>
               ) : (

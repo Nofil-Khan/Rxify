@@ -3,6 +3,7 @@ import {
   BedDouble, Users, AlertCircle, CheckCircle2,
   Clock, Filter, Search, ArrowRight, UserPlus, LogOut
 } from 'lucide-react';
+import { useHospitalAuthStore } from '../../../lib/hospitalAuth';
 
 interface Bed {
   id: string;
@@ -15,7 +16,7 @@ interface Bed {
   doctor?: string;
 }
 
-const BEDS_DATA: Bed[] = [
+const DEMO_BEDS_DATA: Bed[] = [
   { id: 'ICU-01', room: 'Room 101', ward: 'Intensive Care Unit (ICU)', status: 'OCCUPIED', patient: 'Eleanor Vance', mrn: 'RXF-P-8821', admitted: 'Sep 10', doctor: 'Dr. Sarah Chen' },
   { id: 'ICU-02', room: 'Room 102', ward: 'Intensive Care Unit (ICU)', status: 'OCCUPIED', patient: 'James Sterling', mrn: 'RXF-P-4402', admitted: 'Sep 09', doctor: 'Dr. Marcus Vance' },
   { id: 'ICU-03', room: 'Room 103', ward: 'Intensive Care Unit (ICU)', status: 'CLEANING' },
@@ -33,7 +34,10 @@ const BEDS_DATA: Bed[] = [
 ];
 
 export default function AdmissionsTab() {
-  const [beds, setBeds] = useState<Bed[]>(BEDS_DATA);
+  const { hospitalId } = useHospitalAuthStore();
+  const isDemo = hospitalId === 1;
+
+  const [beds, setBeds] = useState<Bed[]>(isDemo ? DEMO_BEDS_DATA : []);
   const [wardFilter, setWardFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -51,6 +55,7 @@ export default function AdmissionsTab() {
   const occupiedCount = beds.filter((b) => b.status === 'OCCUPIED').length;
   const availableCount = beds.filter((b) => b.status === 'AVAILABLE').length;
   const cleaningCount = beds.filter((b) => b.status === 'CLEANING').length;
+  const pendingDischarges = isDemo ? 4 : 0;
 
   return (
     <div>
@@ -74,9 +79,11 @@ export default function AdmissionsTab() {
       <div className="hosp-kpi-grid" style={{ marginBottom: '1rem' }}>
         <div className="hosp-stat-card">
           <span className="hosp-stat-label">Total Occupied Beds</span>
-          <div className="hosp-stat-number">{occupiedCount} <span style={{ fontSize: '0.85rem', color: '#64748b' }}>/ {beds.length}</span></div>
-          <span style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: 600 }}>
-            {((occupiedCount / beds.length) * 100).toFixed(1)}% Census Rate
+          <div className="hosp-stat-number">
+            {occupiedCount} <span style={{ fontSize: '0.85rem', color: '#64748b' }}>/ {beds.length}</span>
+          </div>
+          <span style={{ fontSize: '0.72rem', color: isDemo ? '#d97706' : '#64748b', fontWeight: isDemo ? 600 : 400 }}>
+            {beds.length > 0 ? `${((occupiedCount / beds.length) * 100).toFixed(1)}% Census Rate` : 'No beds currently allocated'}
           </span>
         </div>
         <div className="hosp-stat-card">
@@ -91,8 +98,10 @@ export default function AdmissionsTab() {
         </div>
         <div className="hosp-stat-card">
           <span className="hosp-stat-label">Pending Discharges Today</span>
-          <div className="hosp-stat-number">4</div>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Awaiting pharmacy packet</span>
+          <div className="hosp-stat-number">{pendingDischarges}</div>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {isDemo ? 'Awaiting pharmacy packet' : 'No discharges pending'}
+          </span>
         </div>
       </div>
 
@@ -137,68 +146,78 @@ export default function AdmissionsTab() {
       </div>
 
       {/* Bed Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
-        {filtered.map((b) => (
-          <div
-            key={b.id}
-            style={{
-              background: 'var(--hosp-surface)',
-              border: '1px solid var(--hosp-border)',
-              borderRadius: 'var(--hosp-radius)',
-              padding: '0.9rem',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              gap: '0.6rem',
-            }}
-          >
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 700, fontSize: '0.9rem', color: 'var(--hosp-text-main)' }}>
-                    {b.id}
-                  </span>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{b.room} · {b.ward}</div>
+      {filtered.length === 0 ? (
+        <div className="hosp-panel" style={{ padding: '3.5rem 1.5rem', textAlign: 'center' }}>
+          <BedDouble size={36} style={{ margin: '0 auto 0.75rem auto', color: '#94a3b8', opacity: 0.6 }} />
+          <h4 style={{ margin: 0, fontWeight: 600, color: 'var(--hosp-text-main)' }}>No Inpatient Beds Assigned Yet</h4>
+          <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+            Inpatient room and bed allocations for this facility will appear here as admissions are processed.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.85rem' }}>
+          {filtered.map((b) => (
+            <div
+              key={b.id}
+              style={{
+                background: 'var(--hosp-surface)',
+                border: '1px solid var(--hosp-border)',
+                borderRadius: 'var(--hosp-radius)',
+                padding: '0.9rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '0.6rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 700, fontSize: '0.9rem', color: 'var(--hosp-text-main)' }}>
+                      {b.id}
+                    </span>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{b.room} · {b.ward}</div>
+                  </div>
+
+                  {b.status === 'OCCUPIED' && <span className="hosp-badge hosp-badge--amber">Occupied</span>}
+                  {b.status === 'AVAILABLE' && <span className="hosp-badge hosp-badge--green">Available</span>}
+                  {b.status === 'CLEANING' && <span className="hosp-badge hosp-badge--blue">Cleaning</span>}
                 </div>
 
-                {b.status === 'OCCUPIED' && <span className="hosp-badge hosp-badge--amber">Occupied</span>}
-                {b.status === 'AVAILABLE' && <span className="hosp-badge hosp-badge--green">Available</span>}
-                {b.status === 'CLEANING' && <span className="hosp-badge hosp-badge--blue">Cleaning</span>}
+                {b.patient ? (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem', background: 'var(--hosp-surface-subtle)', borderRadius: '4px', border: '1px solid var(--hosp-border)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--hosp-text-main)' }}>{b.patient}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>MRN: {b.mrn} · Admitted: {b.admitted}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--hosp-text-secondary)', marginTop: '2px' }}>Attending: {b.doctor}</div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem', background: 'var(--hosp-surface-subtle)', borderRadius: '4px', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
+                    {b.status === 'AVAILABLE' ? 'Ready for triage or admission assignment' : 'Sterilization in progress'}
+                  </div>
+                )}
               </div>
 
-              {b.patient ? (
-                <div style={{ marginTop: '0.75rem', padding: '0.6rem', background: 'var(--hosp-surface-subtle)', borderRadius: '4px', border: '1px solid var(--hosp-border)' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--hosp-text-main)' }}>{b.patient}</div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>MRN: {b.mrn} · Admitted: {b.admitted}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--hosp-text-secondary)', marginTop: '2px' }}>Attending: {b.doctor}</div>
-                </div>
-              ) : (
-                <div style={{ marginTop: '0.75rem', padding: '0.6rem', background: 'var(--hosp-surface-subtle)', borderRadius: '4px', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
-                  {b.status === 'AVAILABLE' ? 'Ready for triage or admission assignment' : 'Sterilization in progress'}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', borderTop: '1px solid var(--hosp-border)', paddingTop: '0.5rem' }}>
-              {b.status === 'AVAILABLE' && (
-                <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
-                  Assign Patient
-                </button>
-              )}
-              {b.status === 'OCCUPIED' && (
-                <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', borderTop: '1px solid var(--hosp-border)', paddingTop: '0.5rem' }}>
+                {b.status === 'AVAILABLE' && (
                   <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
-                    Transfer
+                    Assign Patient
                   </button>
-                  <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
-                    Discharge
-                  </button>
-                </>
-              )}
+                )}
+                {b.status === 'OCCUPIED' && (
+                  <>
+                    <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
+                      Transfer
+                    </button>
+                    <button className="hosp-btn-secondary" style={{ fontSize: '0.72rem' }}>
+                      Discharge
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

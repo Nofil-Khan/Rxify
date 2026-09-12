@@ -3,6 +3,7 @@ import {
   Building2, Users, Stethoscope, BedDouble, AlertCircle,
   CheckCircle2, Plus, Phone, Mail, ChevronRight
 } from 'lucide-react';
+import { useHospitalAuthStore } from '../../../lib/hospitalAuth';
 
 interface Department {
   id: string;
@@ -30,7 +31,10 @@ const DEPARTMENTS: Department[] = [
 ];
 
 export default function DepartmentsTab() {
-  const [list] = useState<Department[]>(DEPARTMENTS);
+  const { hospitalId } = useHospitalAuthStore();
+  const isDemo = hospitalId === 1;
+
+  const [list] = useState<Department[]>(isDemo ? DEPARTMENTS : []);
 
   return (
     <div>
@@ -48,7 +52,20 @@ export default function DepartmentsTab() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+      {list.length === 0 ? (
+        <div style={{ padding: '4rem 1.5rem', textAlign: 'center', background: 'var(--hosp-surface)', borderRadius: 'var(--hosp-radius-md)', border: '1px dashed var(--hosp-border)' }}>
+          <Building2 size={36} style={{ margin: '0 auto 0.75rem auto', opacity: 0.4 }} />
+          <h4 style={{ margin: '0 0 0.25rem 0', fontWeight: 600 }}>No Departments Configured</h4>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.25rem', maxWidth: '440px', margin: '0 auto 1.25rem auto' }}>
+            Define clinical divisions (such as Emergency, Cardiology, Internal Medicine, Pediatrics) to track departmental bed utilization, physicians, and active cases.
+          </p>
+          <button className="hosp-btn-primary">
+            <Plus size={15} />
+            <span>Add First Department Unit</span>
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
         {list.map((dept) => {
           const occupancyPct = ((dept.occupiedBeds / dept.totalBeds) * 100).toFixed(0);
           return (
@@ -129,6 +146,7 @@ export default function DepartmentsTab() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

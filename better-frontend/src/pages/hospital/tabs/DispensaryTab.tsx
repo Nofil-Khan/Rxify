@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Package, MapPin, Clock, RefreshCw, AlertCircle, ShoppingBag,
-  ExternalLink, CheckCircle2, Building2
+  ExternalLink, CheckCircle2, Building2, Plus
 } from 'lucide-react';
 import {
   fetchHospitalDispensaries,
@@ -45,14 +45,27 @@ export default function DispensaryTab({ onScanClick }: DispensaryTabProps) {
           </p>
         </div>
 
-        <button
-          className="rx-btn-secondary"
-          onClick={loadDispensaries}
-          style={{ borderRadius: '9999px', padding: '0.4rem 0.9rem' }}
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <a
+            href="/dispensary/register"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rx-btn-primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', padding: '0.45rem 0.9rem' }}
+          >
+            <Plus size={14} />
+            <span>Register New Dispensary</span>
+          </a>
+
+          <button
+            className="rx-btn-secondary"
+            onClick={loadDispensaries}
+            style={{ borderRadius: '9999px', padding: '0.45rem 0.9rem' }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Loading & Error */}
@@ -64,14 +77,14 @@ export default function DispensaryTab({ onScanClick }: DispensaryTabProps) {
       )}
 
       {error && (
-        <div className="rx-action-alert rx-action-alert--error" style={{ marginBottom: '1rem' }}>
+        <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', color: '#f87171', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <AlertCircle size={16} />
           <span>{error}</span>
         </div>
       )}
 
       {/* Empty State */}
-      {!loading && dispensaries.length === 0 && !error && (
+      {!loading && !error && dispensaries.length === 0 && (
         <div style={{ padding: '4rem 1.5rem', textAlign: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
           <Package size={36} style={{ margin: '0 auto 0.75rem auto', opacity: 0.4 }} />
           <h4 style={{ margin: '0 0 0.25rem 0', fontWeight: 600 }}>No Dispensaries Registered Yet</h4>
@@ -79,7 +92,7 @@ export default function DispensaryTab({ onScanClick }: DispensaryTabProps) {
             Dispensaries register under this hospital via the Dispensary Organization Portal.
           </p>
           <a
-            href="/dispensary/login"
+            href="/dispensary/register"
             className="rx-btn-primary"
             style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
           >

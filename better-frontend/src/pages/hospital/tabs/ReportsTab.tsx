@@ -4,6 +4,7 @@ import {
   CheckCircle2, AlertCircle, Clock, Database, Calendar
 } from 'lucide-react';
 import { getHospitalDashboard, type AuditEntry } from '../../../lib/hospitalApi';
+import { useHospitalAuthStore } from '../../../lib/hospitalAuth';
 
 function formatTime(iso: string) {
   try {
@@ -15,6 +16,9 @@ function formatTime(iso: string) {
 }
 
 export default function ReportsTab() {
+  const { hospitalId } = useHospitalAuthStore();
+  const isDemo = hospitalId === 1;
+
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAction, setFilterAction] = useState('ALL');
@@ -39,7 +43,7 @@ export default function ReportsTab() {
     { action: 'READ_MEDICATIONS', entity_type: 'PATIENT', entity_id: 4, details: 'Inpatient active medication profile queried by central dispensary', created_at: new Date(Date.now() - 1000 * 60 * 240).toISOString() },
   ];
 
-  const allAudits = auditEntries.length > 0 ? auditEntries : mockAudits;
+  const allAudits = auditEntries.length > 0 ? auditEntries : (isDemo ? mockAudits : []);
 
   const filtered = allAudits.filter((a) => {
     const matchSearch =
@@ -141,27 +145,37 @@ export default function ReportsTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a, i) => (
-                <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-hosp-mono)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                    {formatTime(a.created_at)}
-                  </td>
-                  <td>
-                    <span className="hosp-badge hosp-badge--blue" style={{ fontFamily: 'var(--font-hosp-mono)' }}>
-                      {a.action}
-                    </span>
-                  </td>
-                  <td style={{ color: 'var(--hosp-text-main)', fontSize: '0.78rem' }}>
-                    {a.details || 'Standard clinical institutional query'}
-                  </td>
-                  <td>
-                    <span className="hosp-badge hosp-badge--green">
-                      <CheckCircle2 size={10} />
-                      <span>Verified Ledger</span>
-                    </span>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'center', padding: '3.5rem 1rem', color: '#64748b' }}>
+                    <ShieldCheck size={32} style={{ margin: '0 auto 0.5rem auto', opacity: 0.4, display: 'block' }} />
+                    <div style={{ fontWeight: 600, color: 'var(--hosp-text-main)', marginBottom: '0.2rem' }}>No Audit Records Found</div>
+                    <div style={{ fontSize: '0.75rem' }}>EHR lookups and prescription views performed by hospital staff will appear in this immutable compliance trail.</div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((a, i) => (
+                  <tr key={i}>
+                    <td style={{ fontFamily: 'var(--font-hosp-mono)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                      {formatTime(a.created_at)}
+                    </td>
+                    <td>
+                      <span className="hosp-badge hosp-badge--blue" style={{ fontFamily: 'var(--font-hosp-mono)' }}>
+                        {a.action}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--hosp-text-main)', fontSize: '0.78rem' }}>
+                      {a.details || 'Standard clinical institutional query'}
+                    </td>
+                    <td>
+                      <span className="hosp-badge hosp-badge--green">
+                        <CheckCircle2 size={10} />
+                        <span>Verified Ledger</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

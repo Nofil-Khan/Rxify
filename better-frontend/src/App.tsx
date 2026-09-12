@@ -100,6 +100,12 @@ const dispensaryLoginRoute = createRoute({
   component: DispensaryAuth,
 });
 
+const dispensaryRegisterRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dispensary/register',
+  component: DispensaryAuth,
+});
+
 const dispensaryPortalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dispensary',
@@ -114,6 +120,7 @@ const routeTree = rootRoute.addChildren([
   hospitalLoginRoute,
   hospitalDashboardRoute,
   dispensaryLoginRoute,
+  dispensaryRegisterRoute,
   dispensaryPortalRoute,
 ]);
 

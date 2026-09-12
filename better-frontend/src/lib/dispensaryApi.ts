@@ -135,7 +135,42 @@ export interface DispensaryDashboardStats {
   total_medicines: number;
 }
 
+export interface DispensaryRegisterData {
+  hospital_id: number;
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  location?: string;
+  operating_hours?: string;
+  avg_prep_minutes?: number;
+}
+
+export interface PublicHospital {
+  hospital_id: number;
+  name: string;
+  city?: string;
+  state?: string;
+  registration_number?: string;
+}
+
 /* ─── API Methods ───────────────────────────────────────────────────────────── */
+
+/** GET /api/dispensary/hospitals */
+export function fetchPublicHospitals(): Promise<PublicHospital[]> {
+  return req('/api/dispensary/hospitals');
+}
+
+/** POST /api/dispensary/register */
+export async function registerDispensary(data: DispensaryRegisterData): Promise<{
+  message: string;
+  dispensary: DispensaryProfile;
+}> {
+  return req('/api/dispensary/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
 
 /** POST /api/dispensary/login */
 export async function loginDispensary(email: string, password: string): Promise<{

@@ -73,9 +73,9 @@ export default function DispensaryPortal() {
     fetchDispensaryProfile()
       .then(setProfile)
       .catch(() => {
-        // Not authenticated as dispensary -> redirect to login
+        // Not authenticated as dispensary -> redirect to dispensary login
         clearAuth();
-        navigate({ to: '/login' });
+        navigate({ to: '/dispensary/login' });
       });
   }, [clearAuth, navigate]);
 
@@ -130,7 +130,7 @@ export default function DispensaryPortal() {
 
   const handleLogout = () => {
     clearAuth();
-    navigate({ to: '/login' });
+    navigate({ to: '/dispensary/login' });
   };
 
   /* Action Handlers */
