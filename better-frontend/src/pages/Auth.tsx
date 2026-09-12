@@ -310,7 +310,7 @@ export default function Auth() {
                 </button>
               </div>
 
-              <div style={{ marginTop: '0.65rem', padding: '0.65rem 0.85rem', borderRadius: '8px', background: 'rgba(14, 165, 233, 0.08)', border: '1px solid rgba(14, 165, 233, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+              <div className="auth-dispensary-callout">
                 <span style={{ color: 'var(--text-secondary)' }}>Hospital Pharmacy / Dispensary Unit?</span>
                 <a href="/dispensary/register" style={{ color: '#0ea5e9', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                   Register Unit <ArrowRight size={12} />

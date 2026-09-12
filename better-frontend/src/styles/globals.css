@@ -1555,13 +1555,19 @@ h1, h2, h3, h4, h5, h6 {
 
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
   background: var(--bg-base);
-  overflow: hidden;
-  padding: 2rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 2.5rem 1.5rem;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* Cursor glow — matches ch1 */
@@ -1586,6 +1592,7 @@ h1, h2, h3, h4, h5, h6 {
   filter: blur(60px);
   opacity: 0.45;
   z-index: 0;
+  max-width: 100vw;
 }
 
 .auth-bg-orb-1 {
@@ -1624,7 +1631,7 @@ h1, h2, h3, h4, h5, h6 {
   pointer-events: none;
 }
 
-/* Logo top-left */
+/* Logo */
 .auth-logo {
   position: fixed;
   top: 1.5rem;
@@ -1634,6 +1641,11 @@ h1, h2, h3, h4, h5, h6 {
   gap: 10px;
   z-index: 10;
   text-decoration: none;
+  transition: opacity var(--duration-fast);
+}
+
+.auth-logo:hover {
+  opacity: 0.9;
 }
 
 .auth-logo-icon {
@@ -1646,6 +1658,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-sm);
   color: #fff;
   box-shadow: var(--shadow-accent);
+  flex-shrink: 0;
 }
 
 .auth-logo span {
@@ -1669,6 +1682,7 @@ h1, h2, h3, h4, h5, h6 {
     var(--shadow-lg),
     0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   padding: 2.5rem;
+  box-sizing: border-box;
   animation: auth-card-in 0.6s var(--ease-out) both;
 }
 
@@ -1803,12 +1817,14 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   padding: 13px 44px 13px 42px;
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: 1rem; /* 16px to prevent iOS Safari auto-zoom */
   color: var(--text-primary);
   background: var(--bg-card-alt);
   border: 1.5px solid rgba(8, 145, 178, 0.14);
   border-radius: var(--radius-md);
   outline: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
   transition:
     border-color var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-fast) var(--ease-out),
@@ -1827,12 +1843,20 @@ h1, h2, h3, h4, h5, h6 {
 
 .auth-eye-btn {
   position: absolute;
-  right: 14px;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--text-muted);
-  padding: 4px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
   transition: color var(--duration-fast);
 }
 
@@ -1859,6 +1883,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
+  touch-action: manipulation;
   transition:
     border-color var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out),
@@ -1899,6 +1924,20 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.8;
 }
 
+/* Dispensary callout card in register */
+.auth-dispensary-callout {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
 /* ── Alerts ── */
 .auth-alert {
   padding: 11px 14px;
@@ -1933,6 +1972,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 10px;
   width: 100%;
   padding: 14px;
+  min-height: 48px;
   font-family: var(--font-heading);
   font-size: 1rem;
   font-weight: 700;
@@ -1943,6 +1983,8 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   overflow: hidden;
   margin-top: 0.25rem;
+  touch-action: manipulation;
+  cursor: pointer;
   transition:
     transform var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-base) var(--ease-out),
@@ -1965,6 +2007,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .auth-submit:hover:not(:disabled)::before {
   opacity: 1;
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .auth-submit span {
@@ -2025,13 +2071,148 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--blue);
 }
 
+/* ── Responsive Mobile & Tablet Adjustments ── */
+@media (max-width: 768px) {
+  .auth-page {
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    justify-content: flex-start;
+  }
+
+  .auth-logo {
+    position: static;
+    margin-bottom: 1.25rem;
+    align-self: center;
+  }
+
+  .auth-bg-orb-1 {
+    width: 320px;
+    height: 320px;
+    top: -80px;
+    right: -60px;
+  }
+
+  .auth-bg-orb-2 {
+    width: 260px;
+    height: 260px;
+    bottom: -60px;
+    left: -40px;
+  }
+}
+
 @media (max-width: 480px) {
+  .auth-page {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .auth-logo {
+    margin-bottom: 1rem;
+  }
+
+  .auth-logo-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .auth-logo span {
+    font-size: 1.15rem;
+  }
+
   .auth-card {
-    padding: 1.75rem 1.25rem;
+    padding: 1.5rem 1.15rem;
+    border-radius: 18px;
+  }
+
+  .auth-card-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-card-icon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 0.75rem;
+  }
+
+  .auth-card-title {
+    font-size: 1.4rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .auth-card-subtitle {
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .auth-tabs {
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-tab {
+    padding: 9px 0;
+    font-size: 0.84rem;
+  }
+
+  .auth-form {
+    gap: 1rem;
+  }
+
+  .auth-role-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .auth-role-card {
+    padding: 0.75rem 0.5rem;
+    gap: 4px;
+  }
+
+  .auth-role-title {
+    font-size: 0.85rem;
+  }
+
+  .auth-role-desc {
+    font-size: 0.68rem;
+    line-height: 1.25;
+  }
+
+  .auth-dispensary-callout {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .auth-submit {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+
+  .auth-footer-note {
+    margin-top: 1.15rem;
+    font-size: 0.74rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-card {
+    padding: 1.25rem 0.85rem;
   }
 
   .auth-role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-role-card {
+    flex-direction: row;
+    text-align: left;
+    padding: 0.7rem 0.85rem;
+    gap: 10px;
+  }
+
+  .auth-role-card svg {
+    flex-shrink: 0;
   }
 }
 
