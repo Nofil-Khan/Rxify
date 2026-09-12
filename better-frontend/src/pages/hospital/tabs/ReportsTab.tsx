@@ -63,7 +63,7 @@ export default function ReportsTab() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="hosp-action-row">
           <button className="hosp-btn-secondary">
             <Download size={14} />
             <span>Export Audit Trail (.CSV)</span>
@@ -72,7 +72,7 @@ export default function ReportsTab() {
       </div>
 
       {/* Compliance Certificates Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
         <div style={{ background: 'var(--hosp-surface)', border: '1px solid var(--hosp-border)', borderRadius: 'var(--hosp-radius-md)', padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '6px', background: 'var(--hosp-success-bg)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShieldCheck size={20} />

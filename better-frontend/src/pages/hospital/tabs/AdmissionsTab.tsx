@@ -67,7 +67,7 @@ export default function AdmissionsTab() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="hosp-action-row">
           <button className="hosp-btn-primary">
             <UserPlus size={15} />
             <span>Admit Inpatient</span>

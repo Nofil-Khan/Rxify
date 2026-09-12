@@ -182,7 +182,7 @@ export default function HospitalDashboard() {
             {/* Operational Status */}
             <span className="hd-status-chip" title="Level 1 General Hospital Accreditation Active">
               <span className="hd-status-dot" />
-              <span>LEVEL 1 ACTIVE</span>
+              <span className="hd-status-text">LEVEL 1 ACTIVE</span>
             </span>
 
             {/* Accreditation Badge */}
@@ -192,8 +192,8 @@ export default function HospitalDashboard() {
               onClick={() => setShowShareModal(true)}
               title="View institutional accreditation ID & QR Code"
             >
-              <ShieldCheck size={14} style={{ color: '#0f766e' }} />
-              <span style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 600 }}>{hCode}</span>
+              <ShieldCheck size={14} style={{ color: '#0f766e', flexShrink: 0 }} />
+              <span className="hd-action-text" style={{ fontFamily: 'var(--font-hosp-mono)', fontWeight: 600 }}>{hCode}</span>
             </button>
 
             {/* Quick QR Scanner */}
@@ -203,8 +203,8 @@ export default function HospitalDashboard() {
               onClick={() => setShowScannerModal(true)}
               title="Scan Patient or Doctor QR Code"
             >
-              <Camera size={14} />
-              <span>Scan QR</span>
+              <Camera size={14} style={{ flexShrink: 0 }} />
+              <span className="hd-action-text">Scan QR</span>
             </button>
 
             {/* Clinical Notifications */}
@@ -225,7 +225,8 @@ export default function HospitalDashboard() {
                     position: 'absolute',
                     right: 0,
                     top: 'calc(100% + 8px)',
-                    width: '320px',
+                    width: 'min(320px, calc(100vw - 2rem))',
+                    maxWidth: '92vw',
                     background: 'var(--hosp-surface)',
                     border: '1px solid var(--hosp-border)',
                     borderRadius: 'var(--hosp-radius-md)',

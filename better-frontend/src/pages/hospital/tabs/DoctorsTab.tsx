@@ -88,7 +88,7 @@ export default function DoctorsTab({ onScanDoctorClick }: DoctorsTabProps) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.6rem' }}>
+        <div className="hosp-action-row">
           {onScanDoctorClick && (
             <button
               className="rx-scan-action-btn"

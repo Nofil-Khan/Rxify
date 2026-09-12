@@ -381,6 +381,25 @@
   color: var(--hosp-text-main);
 }
 
+.hosp-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .hosp-action-row {
+    width: 100%;
+  }
+  .hosp-action-row button,
+  .hosp-action-row a {
+    flex: 1 1 auto;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 .hosp-demo-pill-card {
   margin-top: 1.25rem;
   padding: 0.65rem 0.85rem;
@@ -837,6 +856,46 @@
   background: #ef4444;
 }
 
+@media (max-width: 640px) {
+  .hd-topbar {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+  .hd-topbar-left {
+    gap: 0.5rem;
+    max-width: none;
+  }
+  .hd-topbar-right {
+    gap: 0.35rem;
+  }
+  .hd-status-chip {
+    padding: 4px 6px;
+  }
+  .hd-status-text {
+    display: none;
+  }
+  .hd-action-btn {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hd-topbar {
+    padding: 0.4rem 0.5rem;
+  }
+  .hd-status-chip {
+    display: none;
+  }
+  .hd-action-btn .hd-action-text {
+    display: none;
+  }
+  .hd-action-btn {
+    padding: 6px;
+    border-radius: var(--hosp-radius);
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    4. CONTENT VIEWPORT & CARDS
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -851,7 +910,13 @@
 
 @media (max-width: 640px) {
   .hd-viewport {
-    padding: 1rem;
+    padding: 0.85rem 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hd-viewport {
+    padding: 0.75rem 0.5rem;
   }
 }
 
@@ -865,6 +930,27 @@
   flex-wrap: wrap;
 }
 
+@media (max-width: 640px) {
+  .hosp-section-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .hosp-section-head > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .hosp-section-head .hosp-btn-primary,
+  .hosp-section-head .hosp-btn-secondary {
+    flex: 1 1 auto;
+    min-width: 120px;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 .hosp-section-title {
   font-family: var(--font-hosp-heading);
   font-size: 1.35rem;
@@ -872,6 +958,12 @@
   color: var(--hosp-text-main);
   margin: 0;
   line-height: 1.2;
+}
+
+@media (max-width: 480px) {
+  .hosp-section-title {
+    font-size: 1.15rem;
+  }
 }
 
 .hosp-section-subtitle {
@@ -987,6 +1079,20 @@
   background: var(--hosp-surface);
 }
 
+@media (max-width: 640px) {
+  .hosp-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.75rem 0.85rem;
+  }
+  .hosp-panel-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
 .hosp-panel-title {
   font-family: var(--font-hosp-heading);
   font-size: 0.95rem;
@@ -1007,6 +1113,7 @@
 .hosp-table-wrap {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .hosp-table {
@@ -1014,6 +1121,12 @@
   border-collapse: collapse;
   font-size: 0.8rem;
   text-align: left;
+}
+
+@media (max-width: 768px) {
+  .hosp-table {
+    min-width: 600px;
+  }
 }
 
 .hosp-table th {

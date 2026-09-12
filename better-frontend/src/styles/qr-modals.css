@@ -51,6 +51,30 @@
   max-width: 520px;
 }
 
+@media (max-width: 480px) {
+  .rx-modal-backdrop {
+    padding: 0.5rem;
+  }
+  .rx-modal-card {
+    padding: 1.15rem 0.85rem;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+}
+
+#rx-qr-reader-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  border-radius: 14px;
+}
+
+#rx-qr-reader-container video {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 14px;
+}
+
 /* Header */
 .rx-modal-header {
   display: flex;
@@ -889,6 +913,31 @@
   background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(2, 132, 199, 0.45);
+}
+
+@media (max-width: 640px) {
+  .rx-top-action-bar {
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .rx-id-badge-btn,
+  .rx-scan-action-btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .rx-top-action-bar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .rx-id-badge-btn,
+  .rx-scan-action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    text-align: center;
+  }
 }
 
 /* ── Cross-Portal Header Switcher (Auth & Portal Navigation) ── */

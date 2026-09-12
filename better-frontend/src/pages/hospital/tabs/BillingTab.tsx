@@ -60,7 +60,7 @@ export default function BillingTab() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="hosp-action-row">
           <button className="hosp-btn-secondary" disabled={!isDemo || bills.length === 0}>
             <Download size={14} />
             <span>Export Statement (CSV)</span>
