@@ -51,3 +51,20 @@ class DispenseItemInput(BaseModel):
 class DispenseRequestBody(BaseModel):
     items: Optional[List[DispenseItemInput]] = Field(None, description="List of item quantities dispensed")
     notes: Optional[str] = Field(None, description="Pharmacist notes or instructions")
+
+
+# ── Inventory Availability (read-only, no reservation) ───────────────────────
+
+class AvailabilityMedicineInput(BaseModel):
+    """One resolved medicine entry for a prescription-level availability check."""
+    medicine_id: int = Field(..., gt=0, description="Resolved medicine ID from the medicine matcher")
+    requested_quantity: int = Field(1, ge=1, description="Quantity required (informational; stock is NOT decremented)")
+
+
+class PrescriptionAvailabilityRequest(BaseModel):
+    """Body for POST /api/dispensary/{dispensary_id}/availability."""
+    medicines: List[AvailabilityMedicineInput] = Field(
+        ...,
+        min_length=1,
+        description="List of resolved medicines to check",
+    )

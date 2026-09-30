@@ -7,6 +7,9 @@ Full implementation of the Dispensary feature according to specification:
   - Status Workflow: Process (Reserve Stock), Ready, Dispense (Deduct Stock), Cancel
   - Dashboard & Alerts: Stats counters, Low Stock & Out of Stock alerts
   - Patient View: /api/patient/dispensary/requests
+  - Availability Layer (read-only):
+      GET  /api/dispensary/{dispensary_id}/medicines/{medicine_id}/availability
+      POST /api/dispensary/{dispensary_id}/availability
 """
 
 from __future__ import annotations
@@ -18,12 +21,15 @@ from core.security import create_access_token, require_dispensary, require_role
 from database.db import get_conn
 import psycopg2.extras
 from models.dispensary import (
+    AvailabilityMedicineInput,
     DispenseRequestBody,
     DispensaryLogin,
     DispensaryRegister,
+    PrescriptionAvailabilityRequest,
     StockAddOrUpdateRequest,
     StockPartialUpdate,
 )
+from services import inventory_availability as availability_service
 from services import dispensary as dispensary_service
 
 router = APIRouter(prefix="/api/dispensary", tags=["dispensary"])
@@ -440,3 +446,63 @@ def get_patient_dispensary_requests(current_user: dict = Depends(require_role("P
         raise HTTPException(status_code=400, detail="No patient profile found for this account.")
 
     return dispensary_service.get_patient_dispensary_requests(patient_id)
+
+
+# =============================================================================
+# 8. Inventory Availability Layer (read-only, no reservation)
+# =============================================================================
+
+@router.get(
+    "/{dispensary_id}/medicines/{medicine_id}/availability",
+    summary="Single-medicine availability at a dispensary",
+    tags=["availability"],
+)
+def get_medicine_availability(
+    dispensary_id: int,
+    medicine_id: int,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Check whether a single resolved medicine is available at the given dispensary.
+
+    - **AVAILABLE**     — stock row exists and available_quantity > 0
+    - **NOT_AVAILABLE** — no stock row, or available_quantity == 0
+    - **UNRESOLVED**    — medicine_id does not exist in the catalog
+
+    The caller must ensure dispensary_id matches their own dispensary or have
+    appropriate access; currently restricted to authenticated dispensary accounts.
+    """
+    try:
+        return availability_service.get_medicine_availability(
+            dispensary_id=dispensary_id,
+            medicine_id=medicine_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post(
+    "/{dispensary_id}/availability",
+    summary="Prescription-level availability check (multiple medicines)",
+    tags=["availability"],
+)
+def get_prescription_availability(
+    dispensary_id: int,
+    body: PrescriptionAvailabilityRequest,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Check availability for a list of resolved medicines at a dispensary.
+
+    Accepts a list of ``{medicine_id, requested_quantity}`` objects and returns
+    per-medicine AVAILABLE / NOT_AVAILABLE / UNRESOLVED statuses plus an
+    ``overall_status`` of ALL_AVAILABLE / PARTIALLY_AVAILABLE / NONE_AVAILABLE.
+
+    Stock is **not** reserved or decremented by this endpoint.
+    """
+    medicines = [m.model_dump() for m in body.medicines]
+    try:
+        return availability_service.get_prescription_availability(
+            dispensary_id=dispensary_id,
+            medicines=medicines,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
