@@ -20,6 +20,10 @@ import psycopg2.extras
 import psycopg2.pool
 from psycopg2.extensions import connection as PgConn
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Connection string & Pooling — read from DATABASE_URL env var
 # ---------------------------------------------------------------------------
@@ -389,6 +393,94 @@ def _ensure_hospital_doctor_schema(conn: PgConn) -> None:
         )
 
 
+def _ensure_medicine_matching_schema(conn: PgConn) -> None:
+    """Idempotent migration for the medicine matching infrastructure.
+
+    Creates:
+    - pg_trgm extension (safe if already present)
+    - medicine_alias table (manual brand/OCR-variant -> medicine_id mappings)
+    - GIN trigram indexes on medicine.generic_name and medicine.brand_name
+    """
+    with conn.cursor() as cur:
+        # 1. Enable pg_trgm
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+
+        # 2. medicine_alias table
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS medicine_alias (
+                alias_id    SERIAL PRIMARY KEY,
+                alias_name  TEXT NOT NULL,
+                medicine_id INTEGER NOT NULL REFERENCES medicine(medicine_id) ON DELETE CASCADE,
+                alias_type  TEXT NOT NULL DEFAULT 'brand',
+                notes       TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (alias_name)
+            );
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medicine_alias_lower "
+            "ON medicine_alias (LOWER(alias_name));"
+        )
+
+        # 3. GIN trigram indexes on the medicine catalog
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medicine_generic_trgm "
+            "ON medicine USING GIN (generic_name gin_trgm_ops);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medicine_brand_trgm "
+            "ON medicine USING GIN (brand_name gin_trgm_ops);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medicine_rxnorm_trgm "
+            "ON medicine USING GIN (rxnorm_name gin_trgm_ops);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_medicine_strength "
+            "ON medicine (strength);"
+        )
+
+        # 4. Seed common high-frequency brand and international aliases
+        cur.execute(
+            """
+            INSERT INTO medicine_alias (alias_name, medicine_id, alias_type, notes)
+            SELECT v.alias, v.med_id, v.atype, v.notes
+            FROM (VALUES
+                ('janumet', 861819, 'brand', 'sitagliptin / metformin 500/50'),
+                ('janumet 50/500', 861819, 'brand', 'sitagliptin / metformin 500/50'),
+                ('janumet 50/500mg', 861819, 'brand', 'sitagliptin / metformin 500/50'),
+                ('janumet 50/1000', 861769, 'brand', 'sitagliptin / metformin 1000/50'),
+                ('janumet 50/1000mg', 861769, 'brand', 'sitagliptin / metformin 1000/50'),
+                ('augmentin', 617296, 'brand', 'amoxicillin / clavulanate 500/125'),
+                ('augmentin 625', 617296, 'brand', 'amoxicillin / clavulanate 500/125'),
+                ('augmentin 625mg', 617296, 'brand', 'amoxicillin / clavulanate 500/125'),
+                ('paracetamol', 198440, 'international_inn', 'acetaminophen 500mg tablet'),
+                ('crocin', 198440, 'brand', 'acetaminophen 500mg tablet'),
+                ('crocin 500', 198440, 'brand', 'acetaminophen 500mg tablet'),
+                ('crocin 650', 198444, 'brand', 'acetaminophen 650mg tablet'),
+                ('dolo', 198444, 'brand', 'acetaminophen 650mg tablet'),
+                ('dolo 650', 198444, 'brand', 'acetaminophen 650mg tablet'),
+                ('calpol', 198440, 'brand', 'acetaminophen 500mg tablet'),
+                ('calpol 500', 198440, 'brand', 'acetaminophen 500mg tablet'),
+                ('calpol 650', 198444, 'brand', 'acetaminophen 650mg tablet'),
+                ('panadol', 198440, 'brand', 'acetaminophen 500mg tablet'),
+                ('glucophage', 860975, 'brand', 'metformin 500mg tablet'),
+                ('glucophage 500', 860975, 'brand', 'metformin 500mg tablet'),
+                ('glucophage 850', 861010, 'brand', 'metformin 850mg tablet'),
+                ('glucophage 1000', 861004, 'brand', 'metformin 1000mg tablet'),
+                ('lipitor', 617310, 'brand', 'atorvastatin 20mg tablet'),
+                ('lipitor 10', 617310, 'brand', 'atorvastatin tablet'),
+                ('lipitor 20', 617310, 'brand', 'atorvastatin 20mg tablet'),
+                ('lipitor 40', 617311, 'brand', 'atorvastatin 40mg tablet'),
+                ('lipitor 80', 259255, 'brand', 'atorvastatin 80mg tablet')
+            ) AS v(alias, med_id, atype, notes)
+            ON CONFLICT (alias_name) DO NOTHING;
+            """
+        )
+
+
 def init_db() -> None:
     """Run the full idempotent schema migration from database/schema.sql if needed."""
     with get_conn() as conn:
@@ -399,6 +491,7 @@ def init_db() -> None:
                 print("[DB] PostgreSQL schema already initialised.")
                 _ensure_hospital_schema(conn)
                 _ensure_dispensary_schema(conn)
+                _ensure_medicine_matching_schema(conn)
                 return
 
     schema_path = Path(__file__).parent / "schema.sql"

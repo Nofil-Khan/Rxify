@@ -181,7 +181,13 @@ def insert_prescription(extracted: Dict[str, Any], user_id: int) -> int:
 
             # Insert each medication with sanitized name field (NOT NULL requirement)
             for med in extracted.get("medications", []):
-                med_name = med.get("name")
+                # Gemini output uses `raw_name`; fall back to `normalised_name`
+                # then `name` for legacy compatibility.
+                med_name = (
+                    med.get("raw_name")
+                    or med.get("normalised_name")
+                    or med.get("name")
+                )
                 if not med_name or not str(med_name).strip():
                     med_name = "Unspecified Medicine"
                 else:
