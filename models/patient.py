@@ -46,3 +46,15 @@ class PatientBookAppointmentRequest(BaseModel):
     )
     reason_for_visit: Optional[str] = Field(None, description="Chief complaint or reason")
 
+
+# =============================================================================
+# Medication timeline & tracking schemas
+# =============================================================================
+
+class UpdateMedicationStatusRequest(BaseModel):
+    """Request body for updating the status of a current medication record."""
+    status: str = Field(..., description="ACTIVE | DISCONTINUED | COMPLETED")
+    end_date: Optional[str] = Field(None, description="ISO format date YYYY-MM-DD")
+    notes: Optional[str] = Field(None, description="Reason for stopping, side-effects, or notes")
+
+

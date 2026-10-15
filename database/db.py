@@ -222,12 +222,15 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
             """
             CREATE TABLE IF NOT EXISTS dispensary (
                 dispensary_id       SERIAL PRIMARY KEY,
-                hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+                hospital_id         INTEGER REFERENCES hospital(hospital_id) ON DELETE SET NULL,
                 name                TEXT NOT NULL DEFAULT 'Main Dispensary',
                 email               TEXT UNIQUE NOT NULL,
                 password_hash       TEXT NOT NULL,
                 phone               TEXT,
                 location            TEXT,
+                latitude            DOUBLE PRECISION,
+                longitude           DOUBLE PRECISION,
+                address             TEXT,
                 operating_hours     TEXT,
                 avg_prep_minutes    INTEGER NOT NULL DEFAULT 15,
                 status              TEXT NOT NULL DEFAULT 'ACTIVE',
@@ -236,8 +239,25 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
             );
             """
         )
+        cur.execute("ALTER TABLE dispensary ALTER COLUMN hospital_id DROP NOT NULL;")
+        cur.execute("ALTER TABLE dispensary DROP CONSTRAINT IF EXISTS dispensary_hospital_id_fkey;")
+        cur.execute(
+            """
+            DO $$ BEGIN
+                ALTER TABLE dispensary
+                    ADD CONSTRAINT dispensary_hospital_id_fkey
+                    FOREIGN KEY (hospital_id) REFERENCES hospital(hospital_id)
+                    ON DELETE SET NULL;
+            EXCEPTION WHEN others THEN NULL;
+            END $$;
+            """
+        )
+        cur.execute("ALTER TABLE dispensary ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;")
+        cur.execute("ALTER TABLE dispensary ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;")
+        cur.execute("ALTER TABLE dispensary ADD COLUMN IF NOT EXISTS address TEXT;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_hospital_id ON dispensary(hospital_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_email ON dispensary(email);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_lat_lng ON dispensary(latitude, longitude);")
 
         # 2. Add new ENUM values to dispensary_status (idempotent)
         for val in ('PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'CANCELLED'):
@@ -481,6 +501,68 @@ def _ensure_medicine_matching_schema(conn: PgConn) -> None:
         )
 
 
+def _ensure_prescription_match_status_column(conn: PgConn) -> None:
+    """Idempotently add match_status column to prescription_medicine.
+
+    Stores the outcome of the medicine_matcher pipeline so that:
+    - The dispensary auto-request can map matcher states to availability_status.
+    - Any future consumer can read the match outcome without re-running the matcher.
+
+    Values: MATCHED | AMBIGUOUS | UNRESOLVED | NOT_A_MEDICINE | NULL (legacy rows)
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            ALTER TABLE prescription_medicine
+                ADD COLUMN IF NOT EXISTS match_status TEXT;
+            """
+        )
+    print("[DB] prescription_medicine.match_status column ensured.")
+
+
+def _ensure_patient_resolved_column(conn: PgConn) -> None:
+    """Idempotently add patient_resolved boolean to prescription_medicine.
+
+    When TRUE, indicates the patient explicitly confirmed / selected the
+    medicine_id themselves via the clarification UI.  This flag protects the
+    patient's choice from being overwritten by any future automatic re-matching
+    job.  Rows inserted by the automatic pipeline always default to FALSE.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            ALTER TABLE prescription_medicine
+                ADD COLUMN IF NOT EXISTS patient_resolved BOOLEAN NOT NULL DEFAULT FALSE;
+            """
+        )
+    print("[DB] prescription_medicine.patient_resolved column ensured.")
+
+
+def _ensure_current_medication_schema(conn: PgConn) -> None:
+    """Ensure current_medication table has the UNIQUE constraint and indexes."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'uq_current_med_patient_pm'
+                ) THEN
+                    ALTER TABLE current_medication
+                        ADD CONSTRAINT uq_current_med_patient_pm
+                        UNIQUE (patient_id, prescription_medicine_id);
+                END IF;
+            END $$;
+            CREATE INDEX IF NOT EXISTS idx_current_med_patient_status
+                ON current_medication (patient_id, status);
+            CREATE INDEX IF NOT EXISTS idx_current_med_timeline
+                ON current_medication (patient_id, start_date, end_date);
+            """
+        )
+    print("[DB] current_medication constraints and indexes ensured.")
+
+
 def init_db() -> None:
     """Run the full idempotent schema migration from database/schema.sql if needed."""
     with get_conn() as conn:
@@ -492,6 +574,9 @@ def init_db() -> None:
                 _ensure_hospital_schema(conn)
                 _ensure_dispensary_schema(conn)
                 _ensure_medicine_matching_schema(conn)
+                _ensure_prescription_match_status_column(conn)
+                _ensure_patient_resolved_column(conn)
+                _ensure_current_medication_schema(conn)
                 return
 
     schema_path = Path(__file__).parent / "schema.sql"

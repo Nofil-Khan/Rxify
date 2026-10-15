@@ -238,12 +238,15 @@ CREATE TABLE IF NOT EXISTS patient_doctor (
 -- Dispensary entity (authenticated org belonging to a hospital)
 CREATE TABLE IF NOT EXISTS dispensary (
     dispensary_id       SERIAL PRIMARY KEY,
-    hospital_id         INTEGER NOT NULL REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    hospital_id         INTEGER REFERENCES hospital(hospital_id) ON DELETE SET NULL,
     name                TEXT NOT NULL DEFAULT 'Main Dispensary',
     email               TEXT UNIQUE NOT NULL,
     password_hash       TEXT NOT NULL,
     phone               TEXT,
     location            TEXT,           -- e.g. "Ground Floor, Block A"
+    latitude            DOUBLE PRECISION,
+    longitude           DOUBLE PRECISION,
+    address             TEXT,
     operating_hours     TEXT,           -- e.g. "08:00-20:00 daily"
     avg_prep_minutes    INTEGER NOT NULL DEFAULT 15,
     status              TEXT NOT NULL DEFAULT 'ACTIVE',
@@ -323,8 +326,13 @@ CREATE TABLE IF NOT EXISTS current_medication (
     status                      medication_status NOT NULL DEFAULT 'ACTIVE',
     notes                       TEXT,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (patient_id, prescription_medicine_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_current_med_patient_status ON current_medication(patient_id, status);
+CREATE INDEX IF NOT EXISTS idx_current_med_timeline ON current_medication(patient_id, start_date, end_date);
+
 
 -- Dispensary Request (One per prescription submitted to a dispensary)
 CREATE TABLE IF NOT EXISTS dispensary_request (

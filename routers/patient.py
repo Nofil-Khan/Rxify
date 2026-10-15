@@ -20,7 +20,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.security import require_role
-from models.patient import PatientBookAppointmentRequest, RequestDoctorAssignment
+from models.patient import (
+    PatientBookAppointmentRequest,
+    RequestDoctorAssignment,
+    UpdateMedicationStatusRequest,
+)
 from services import patient as patient_service
 from services import patient_appointment as appt_service
 
@@ -339,4 +343,53 @@ def my_dispensary_requests(
     if not patient_id:
         raise HTTPException(status_code=400, detail="No patient profile found for this account.")
     return {"requests": dispensary_service.get_patient_dispensary_requests(patient_id)}
+
+
+# =============================================================================
+# Active Medication Timeline & Current Regimen
+# =============================================================================
+
+@router.get("/medication-timeline")
+def get_medication_timeline(
+    current_user: dict = Depends(require_role("patient")),
+):
+    """Retrieve a chronological flowchart timeline of all active, continued, and
+
+    discontinued medications for the authenticated patient.
+
+    Returns:
+      - milestones: Date-by-date regimen snapshots with NEW, CONTINUED, and DISCONTINUED status
+      - flowchart_links: Graph edges showing continuity and transitions between milestones
+      - active_now: Real-time list of medications currently active today
+      - summary: High-level overview counts
+
+    **Access:** Patient only.
+    """
+    return patient_service.get_patient_medication_timeline(patient_user_id=current_user["id"])
+
+
+@router.patch("/current-medications/{current_medication_id}/status")
+def update_medication_status(
+    current_medication_id: int,
+    body: UpdateMedicationStatusRequest,
+    current_user: dict = Depends(require_role("patient")),
+):
+    """Update status of a tracked medication (e.g. mark as DISCONTINUED, ACTIVE, or COMPLETED).
+
+    Allows patients to record if a medicine was stopped, specify the stop date,
+    or add a reason note (e.g., side effects or finished early).
+
+    **Access:** Patient only.
+    """
+    try:
+        return patient_service.update_patient_medication_status(
+            patient_user_id=current_user["id"],
+            current_medication_id=current_medication_id,
+            status=body.status,
+            end_date=body.end_date,
+            notes=body.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 

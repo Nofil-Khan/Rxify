@@ -16,8 +16,21 @@ from core.security import get_current_user, require_role
 from models.prescription import CreateShareToken
 from services import prescription as prescription_service
 from services import sharing as sharing_service
+from services import patient as patient_service
 
 router = APIRouter(tags=["prescription"])
+
+
+# ---------------------------------------------------------------------------
+# Request body schema for the patient-resolve endpoint
+# ---------------------------------------------------------------------------
+from pydantic import BaseModel as _BaseModel, Field as _Field  # noqa: E402
+
+
+class _ResolveMedicineBody(_BaseModel):
+    medicine_id: int = _Field(
+        ..., gt=0, description="Catalog medicine_id chosen by the patient."
+    )
 
 
 # =============================================================================
@@ -167,3 +180,78 @@ def get_shared_prescriptions(token: str):
             detail="This token is invalid, expired, or has been revoked.",
         )
     return {"total": len(prescriptions), "prescriptions": prescriptions}
+
+
+# =============================================================================
+# Medicine clarification (auth required — patient only)
+# =============================================================================
+
+@router.get(
+    "/api/patient/prescriptions/{prescription_id}/medicines/{pm_id}/candidates",
+    summary="Get clarification candidates for an unresolved medicine",
+)
+def get_medicine_candidates(
+    prescription_id: int,
+    pm_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return ranked catalog candidates for an AMBIGUOUS or UNRESOLVED medicine.
+
+    Re-runs the medicine matcher pipeline on demand.  For AMBIGUOUS entries the
+    same candidates the auto-matcher found are returned, enriched with catalog
+    details (strength, form, category).  For UNRESOLVED entries a lower-threshold
+    trigram search is used so the patient still gets useful suggestions.
+
+    The ``prescription_id`` parameter is used only for URL clarity — the service
+    layer re-validates ownership through the ``pm_id`` directly.
+
+    **Access:** Authenticated patient who owns the prescription.
+    """
+    result = patient_service.get_medicine_candidates(
+        pm_id=pm_id,
+        patient_user_id=current_user["id"],
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Prescription medicine #{pm_id} not found or access denied.",
+        )
+    return result
+
+
+@router.patch(
+    "/api/patient/prescriptions/{prescription_id}/medicines/{pm_id}/resolve",
+    summary="Patient resolves an ambiguous/unresolved medicine",
+)
+def resolve_medicine(
+    prescription_id: int,
+    pm_id: int,
+    body: _ResolveMedicineBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Commit a patient-selected catalog medicine_id for an unresolved entry.
+
+    Sets ``match_status = 'MATCHED'`` and ``patient_resolved = TRUE`` on the
+    prescription medicine row, then triggers a dispensary re-evaluation so that
+    stock availability is refreshed for the now-identified medicine.
+
+    Returns the updated catalog details (generic_name, brand_name, strength, form,
+    category) so the frontend can update the card immediately without a reload.
+
+    **Access:** Authenticated patient who owns the prescription.
+    """
+    try:
+        result = patient_service.resolve_prescription_medicine(
+            pm_id=pm_id,
+            medicine_id=body.medicine_id,
+            patient_user_id=current_user["id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Prescription medicine #{pm_id} not found or access denied.",
+        )
+    return {"message": "Medicine resolved successfully.", "medicine": result}
