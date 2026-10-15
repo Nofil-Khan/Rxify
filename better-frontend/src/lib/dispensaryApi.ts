@@ -2,7 +2,7 @@
 
 import { authHeaders, ApiError } from './api';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -29,11 +29,14 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 export interface DispensaryProfile {
   dispensary_id: number;
   dispensary_code?: string;
-  hospital_id: number;
+  hospital_id?: number | null;
   name: string;
   email: string;
   phone: string | null;
-  location: string | null;
+  location: string | null;          // legacy floor/wing text
+  address: string | null;           // GPS-resolved human-readable address
+  latitude: number | null;
+  longitude: number | null;
   operating_hours: string | null;
   avg_prep_minutes: number;
   status: string;
@@ -65,6 +68,7 @@ export interface CatalogMedicine {
   category: string | null;
   strength: string | null;
   form: string;
+  rxcui?: string | null;
 }
 
 export interface QueueItemSummary {
@@ -90,6 +94,7 @@ export interface RequestItemDetail {
   instructions: string | null;
   generic_name: string | null;
   brand_name: string | null;
+  strength?: string | null;
   form: string | null;
   required_quantity: number;
   dispensed_quantity: number | null;
@@ -136,7 +141,7 @@ export interface DispensaryDashboardStats {
 }
 
 export interface DispensaryRegisterData {
-  hospital_id: number;
+  hospital_id?: number;
   name: string;
   email: string;
   password: string;
@@ -315,3 +320,18 @@ export function lookupDispensaryCode(code: string): Promise<DispensaryLookupResu
 }
 
 
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  address?: string | null;
+}
+
+/** PATCH /api/dispensary/location */
+export function updateDispensaryLocation(
+  data: LocationData
+): Promise<{ message: string; dispensary: DispensaryProfile }> {
+  return req('/api/dispensary/location', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}

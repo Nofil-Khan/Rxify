@@ -67,16 +67,10 @@ export default function DispensaryAuth() {
         if (!active) return;
         if (Array.isArray(data) && data.length > 0) {
           setHospitals(data);
-          setRegHospitalId(String(data[0].hospital_id));
-        } else {
-          setHospitals([{ hospital_id: 1, name: 'City General Hospital', city: 'Metro City' }]);
-          setRegHospitalId('1');
         }
       })
       .catch(() => {
-        if (!active) return;
-        setHospitals([{ hospital_id: 1, name: 'City General Hospital', city: 'Metro City' }]);
-        setRegHospitalId('1');
+        // optional hospitals
       })
       .finally(() => {
         if (active) setHospitalsLoading(false);
@@ -115,7 +109,7 @@ export default function DispensaryAuth() {
 
     const nameTrim = regName.trim();
     const emailTrim = regEmail.trim();
-    const parsedHospId = parseInt(regHospitalId, 10);
+    const parsedHospId = regHospitalId.trim() ? parseInt(regHospitalId, 10) : undefined;
 
     if (!nameTrim) {
       setRegError('Dispensary name is required.');
@@ -133,8 +127,8 @@ export default function DispensaryAuth() {
       setRegError('Passwords do not match. Please re-enter.');
       return;
     }
-    if (isNaN(parsedHospId) || parsedHospId <= 0) {
-      setRegError('Please select or specify a valid hospital affiliation.');
+    if (parsedHospId !== undefined && (isNaN(parsedHospId) || parsedHospId <= 0)) {
+      setRegError('Please specify a valid hospital affiliation or select Independent.');
       return;
     }
 
@@ -342,10 +336,9 @@ export default function DispensaryAuth() {
                       type="number"
                       min={1}
                       className="auth-input"
-                      placeholder="Hospital ID (e.g. 1)"
+                      placeholder="Optional Hospital ID (or leave blank for Independent)"
                       value={regHospitalId}
                       onChange={(e) => setRegHospitalId(e.target.value)}
-                      required
                     />
                   ) : (
                     <select
@@ -355,8 +348,8 @@ export default function DispensaryAuth() {
                       value={regHospitalId}
                       onChange={(e) => setRegHospitalId(e.target.value)}
                       disabled={hospitalsLoading}
-                      required
                     >
+                      <option value="">Independent Dispensary (No Hospital Affiliation)</option>
                       {hospitals.map((h) => (
                         <option key={h.hospital_id} value={h.hospital_id}>
                           {h.name} {h.city ? `(${h.city})` : ''} — ID: {h.hospital_id}

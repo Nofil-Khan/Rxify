@@ -1,942 +1,861 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Building2, Package, Clock, CheckCircle2, AlertTriangle, XCircle,
-  RefreshCw, Search, Plus, LogOut, Sun, Moon, QrCode, Filter,
-  TrendingUp, Activity, Check, X, ShieldCheck, Upload, FileText, Camera
+  Building2, Package, LayoutDashboard, Clock,
+  RefreshCw, Search, Plus, LogOut, Sun, Moon,
+  QrCode, AlertTriangle, Upload, Camera, ShieldCheck,
+  XCircle, MapPin,
 } from 'lucide-react';
 import { useAuthStore } from '../../lib/auth';
 import { useNavigate } from '@tanstack/react-router';
 import ShareIdModal from '../../components/common/ShareIdModal';
 import QrScannerModal from '../../components/common/QrScannerModal';
 import {
-  fetchDispensaryProfile, fetchInventory, addOrUpdateStock, updateStockPartial,
-  searchMedicineCatalog, fetchDispensaryQueue, fetchDispensaryRequestDetail,
-  processDispensaryRequest, markDispensaryRequestReady, dispenseDispensaryRequest,
-  cancelDispensaryRequest, fetchDispensaryDashboardStats, fetchDispensaryAlerts,
-  uploadInventoryCsv,
-  type DispensaryProfile, type InventoryItem, type CatalogMedicine,
-  type QueueItemSummary, type RequestDetail, type DispensaryDashboardStats
+  fetchDispensaryProfile, fetchInventory, fetchDispensaryQueue,
+  fetchDispensaryRequestDetail,
+  processDispensaryRequest, markDispensaryRequestReady,
+  dispenseDispensaryRequest, cancelDispensaryRequest,
+  fetchDispensaryDashboardStats, fetchDispensaryAlerts,
+  uploadInventoryCsv, updateStockPartial,
+  type DispensaryProfile, type InventoryItem,
+  type QueueItemSummary, type RequestDetail, type DispensaryDashboardStats,
 } from '../../lib/dispensaryApi';
+import { RequestStatusBadge, StockStatusBadge } from './components/StatusBadge';
+import RequestDetailPanel from './components/RequestDetailPanel';
+import { AddStockModal, EditStockModal } from './components/StockModals';
+import { useToast, ToastStack } from './components/useToast';
+import ProfileTab from './components/ProfileTab';
 
-type Tab = 'queue' | 'inventory' | 'dashboard' | 'alerts';
+type Tab = 'queue' | 'inventory' | 'dashboard' | 'profile';
 
-export default function DispensaryPortal() {
-  const { clearAuth } = useAuthStore();
-  const navigate = useNavigate();
+// ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
-  const [dark, setDark] = useState(() => localStorage.getItem('rxify-theme') === 'dark');
-  const [profile, setProfile] = useState<DispensaryProfile | null>(null);
-  const [tab, setTab] = useState<Tab>('queue');
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showScannerModal, setShowScannerModal] = useState(false);
+function fmtRelTime(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
-  /* Queue state */
-  const [queue, setQueue] = useState<QueueItemSummary[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [selectedReqId, setSelectedReqId] = useState<number | null>(null);
-  const [selectedReqDetail, setSelectedReqDetail] = useState<RequestDetail | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [dispenseNotes, setDispenseNotes] = useState('');
+// ─── Queue Tab ────────────────────────────────────────────────────────────────
 
-  /* Inventory state */
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [invSearch, setInvSearch] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
+const STATUS_FILTERS = ['ALL', 'PENDING', 'PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'DISPENSED', 'UNAVAILABLE', 'CANCELLED'];
 
-  /* Add stock modal state */
-  const [catSearch, setCatSearch] = useState('');
-  const [catResults, setCatResults] = useState<CatalogMedicine[]>([]);
-  const [selectedMed, setSelectedMed] = useState<CatalogMedicine | null>(null);
-  const [addQty, setAddQty] = useState(100);
-  const [addReorder, setAddReorder] = useState(10);
-  const [addUnit, setAddUnit] = useState('tablets');
+interface QueueTabProps {
+  queue: QueueItemSummary[];
+  loading: boolean;
+  error: string;
+  statusFilter: string;
+  onFilterChange: (s: string) => void;
+  selectedReqId: number | null;
+  selectedReqDetail: RequestDetail | null;
+  detailLoading: boolean;
+  onSelectReq: (id: number) => void;
+  onCloseDetail: () => void;
+  onProcess: (id: number) => void;
+  onMarkReady: (id: number) => void;
+  onDispense: (id: number, notes: string) => void;
+  onCancel: (id: number) => void;
+  actionLoading: boolean;
+  onScanOpen: () => void;
+  toast: (msg: string, v?: any) => void;
+}
 
-  /* Edit stock modal state */
-  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-  const [editQty, setEditQty] = useState(0);
-
-  /* Dashboard stats */
-  const [stats, setStats] = useState<DispensaryDashboardStats | null>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  /* Theme application */
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-    localStorage.setItem('rxify-theme', dark ? 'dark' : 'light');
-  }, [dark]);
-
-  /* Initial Load */
-  useEffect(() => {
-    fetchDispensaryProfile()
-      .then(setProfile)
-      .catch(() => {
-        // Not authenticated as dispensary -> redirect to dispensary login
-        clearAuth();
-        navigate({ to: '/dispensary/login' });
-      });
-  }, [clearAuth, navigate]);
-
-  /* Load Active Tab Data */
-  const loadTabData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      if (tab === 'queue') {
-        const q = await fetchDispensaryQueue(statusFilter === 'ALL' ? undefined : statusFilter);
-        setQueue(q);
-      } else if (tab === 'inventory') {
-        const inv = await fetchInventory();
-        setInventory(inv);
-      } else if (tab === 'dashboard') {
-        const s = await fetchDispensaryDashboardStats();
-        setStats(s);
-      } else if (tab === 'alerts') {
-        const a = await fetchDispensaryAlerts();
-        setAlerts(a.alerts || []);
-      }
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to load data.');
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, statusFilter]);
-
-  useEffect(() => {
-    loadTabData();
-    const interval = setInterval(() => loadTabData(), 15000); // 15s polling
-    return () => clearInterval(interval);
-  }, [loadTabData]);
-
-  /* Fetch detail when a queue request is selected */
-  useEffect(() => {
-    if (selectedReqId) {
-      fetchDispensaryRequestDetail(selectedReqId)
-        .then(setSelectedReqDetail)
-        .catch((err) => setError(err?.message ?? 'Failed to load request detail.'));
-    } else {
-      setSelectedReqDetail(null);
-    }
-  }, [selectedReqId]);
-
-  /* Catalog Search for Add Stock Modal */
-  useEffect(() => {
-    if (showAddModal) {
-      searchMedicineCatalog(catSearch).then(setCatResults).catch(console.error);
-    }
-  }, [showAddModal, catSearch]);
-
-  const handleLogout = () => {
-    clearAuth();
-    navigate({ to: '/dispensary/login' });
-  };
-
-  /* Action Handlers */
-  const handleProcess = async (reqId: number) => {
-    setActionLoading(true);
-    try {
-      await processDispensaryRequest(reqId);
-      const detail = await fetchDispensaryRequestDetail(reqId);
-      setSelectedReqDetail(detail);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to process request.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleMarkReady = async (reqId: number) => {
-    setActionLoading(true);
-    try {
-      await markDispensaryRequestReady(reqId);
-      const detail = await fetchDispensaryRequestDetail(reqId);
-      setSelectedReqDetail(detail);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to mark ready.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDispense = async (reqId: number) => {
-    setActionLoading(true);
-    try {
-      await dispenseDispensaryRequest(reqId, dispenseNotes);
-      const detail = await fetchDispensaryRequestDetail(reqId);
-      setSelectedReqDetail(detail);
-      setDispenseNotes('');
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to dispense.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleCancel = async (reqId: number) => {
-    const reason = prompt('Enter cancellation reason (optional):');
-    if (reason === null) return;
-    setActionLoading(true);
-    try {
-      await cancelDispensaryRequest(reqId, reason);
-      const detail = await fetchDispensaryRequestDetail(reqId);
-      setSelectedReqDetail(detail);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to cancel.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleAddStockSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMed) return alert('Please select a medicine from the catalog.');
-    try {
-      await addOrUpdateStock({
-        medicine_id: selectedMed.medicine_id,
-        available_quantity: addQty,
-        reorder_level: addReorder,
-        unit: addUnit,
-      });
-      setShowAddModal(false);
-      setSelectedMed(null);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to add stock.');
-    }
-  };
-
-  const handleEditStockSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editItem) return;
-    try {
-      await updateStockPartial(editItem.inventory_id, { available_quantity: editQty });
-      setEditItem(null);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to update stock.');
-    }
-  };
-
-  const handleCsvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const res = await uploadInventoryCsv(file);
-      alert(res.message);
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to upload CSV.');
-    } finally {
-      e.target.value = '';
-    }
-  };
-
-  const handleQuickAdd = async (item: InventoryItem, delta: number) => {
-    const newQty = Math.max(0, item.available_quantity + delta);
-    try {
-      await updateStockPartial(item.inventory_id, { available_quantity: newQty });
-      loadTabData();
-    } catch (err: any) {
-      alert(err?.message ?? 'Failed to update stock.');
-    }
-  };
-
-  const filteredInventory = inventory.filter((i) => {
-    if (!invSearch.trim()) return true;
-    const q = invSearch.toLowerCase();
-    return (
-      i.generic_name.toLowerCase().includes(q) ||
-      i.brand_name?.toLowerCase().includes(q) ||
-      i.category?.toLowerCase().includes(q)
-    );
-  });
-
+function QueueTab({
+  queue, loading, error, statusFilter, onFilterChange,
+  selectedReqId, selectedReqDetail, detailLoading,
+  onSelectReq, onCloseDetail,
+  onProcess, onMarkReady, onDispense, onCancel,
+  actionLoading, onScanOpen, toast,
+}: QueueTabProps) {
   return (
-    <div className="pd-shell" data-theme={dark ? 'dark' : 'light'}>
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-      <aside className="pd-sidebar" style={{ width: '260px' }}>
-        <div className="pd-logo">
-          <div className="pd-logo-icon" style={{ background: '#0ea5e9' }}>
-            <Building2 size={18} color="#fff" />
-          </div>
-          <span className="pd-logo-text">Dispensary Portal</span>
+    <div className="disp-section">
+      {/* Walk-in scan bar */}
+      <div className="disp-scan-bar">
+        <div>
+          <div className="disp-scan-bar-text">Walk-in patient verification</div>
+          <div className="disp-scan-bar-sub">Scan patient QR or prescription code to retrieve their orders instantly.</div>
         </div>
+        <button className="disp-btn disp-btn--primary" onClick={onScanOpen}>
+          <Camera size={14} /> Scan QR
+        </button>
+      </div>
 
-        <nav className="pd-nav">
-          <p className="pd-nav-label">Management</p>
-
+      {/* Filter pills */}
+      <div className="disp-filter-bar">
+        {STATUS_FILTERS.map((s) => (
           <button
-            className={`pd-nav-item ${tab === 'queue' ? 'pd-nav-item--active' : ''}`}
-            onClick={() => setTab('queue')}
+            key={s}
+            className={`disp-filter-pill ${statusFilter === s ? 'disp-filter-pill--active' : ''}`}
+            onClick={() => onFilterChange(s)}
           >
-            <Clock size={18} />
-            <span className="pd-nav-text">
-              <span className="pd-nav-label-text">Live Queue</span>
-              <span className="pd-nav-desc">Prescription fulfillment</span>
-            </span>
+            {s === 'ALL' ? 'All' : s === 'PARTIALLY_AVAILABLE' ? 'Partial' : s.charAt(0) + s.slice(1).toLowerCase()}
           </button>
+        ))}
+      </div>
 
-          <button
-            className={`pd-nav-item ${tab === 'inventory' ? 'pd-nav-item--active' : ''}`}
-            onClick={() => setTab('inventory')}
-          >
-            <Package size={18} />
-            <span className="pd-nav-text">
-              <span className="pd-nav-label-text">Medicine Stock</span>
-              <span className="pd-nav-desc">Inventory & reservations</span>
-            </span>
-          </button>
+      {/* Error */}
+      {error && (
+        <div className="disp-error-bar"><XCircle size={14} />{error}</div>
+      )}
 
-          <button
-            className={`pd-nav-item ${tab === 'dashboard' ? 'pd-nav-item--active' : ''}`}
-            onClick={() => setTab('dashboard')}
-          >
-            <TrendingUp size={18} />
-            <span className="pd-nav-text">
-              <span className="pd-nav-label-text">Dashboard</span>
-              <span className="pd-nav-desc">Analytics & summary</span>
-            </span>
-          </button>
-
-          <button
-            className={`pd-nav-item ${tab === 'alerts' ? 'pd-nav-item--active' : ''}`}
-            onClick={() => setTab('alerts')}
-          >
-            <AlertTriangle size={18} />
-            <span className="pd-nav-text">
-              <span className="pd-nav-label-text">Stock Alerts</span>
-              <span className="pd-nav-desc">Low stock warnings</span>
-            </span>
-          </button>
-        </nav>
-
-        <div className="pd-sidebar-footer">
-          <div className="pd-user-row">
-            <div className="pd-avatar" style={{ background: '#0ea5e9', color: '#fff' }}>
-              {(profile?.name ?? 'DP').slice(0, 2).toUpperCase()}
-            </div>
-            <div className="pd-user-info">
-              <span className="pd-user-name">{profile?.name ?? 'Main Dispensary'}</span>
-              <span className="pd-user-role">{profile?.location ?? 'Dispensary'}</span>
-            </div>
-          </div>
-
-          <div className="pd-footer-actions">
-            <button className="pd-icon-btn" onClick={() => setDark(!dark)}>
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <button className="pd-logout-btn" onClick={handleLogout}>
-              <LogOut size={16} />
-              <span>Log out</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── Main Area ────────────────────────────────────────────────────── */}
-      <main className="pd-main" style={{ padding: '2rem' }}>
-        {/* Top Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              {profile?.name ?? 'Dispensary Management'}
-            </h1>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-              {profile?.location ? `${profile.location} · ` : ''}
-              {profile?.operating_hours ? `Hours: ${profile.operating_hours}` : ''}
-            </p>
-          </div>
-
-          <div className="rx-top-action-bar">
-            <button
-              id="dispensary-share-id-btn"
-              className="rx-id-badge-btn"
-              onClick={() => setShowShareModal(true)}
-              title="View and share Dispensary ID and QR Code"
-            >
-              <ShieldCheck size={14} />
-              <span>ID: {profile?.dispensary_code || (profile?.dispensary_id ? `RXF-DISP-${profile.dispensary_id}` : 'Dispensary ID')}</span>
-            </button>
-            <button
-              id="dispensary-scan-btn"
-              className="rx-scan-action-btn"
-              onClick={() => setShowScannerModal(true)}
-              title="Scan Walk-In Patient or Prescription QR Code"
-            >
-              <Camera size={14} />
-              <span>Scan Patient / Rx</span>
-            </button>
-            <button
-              type="button"
-              className="pd-btn-sm"
-              onClick={() => loadTabData()}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <RefreshCw size={14} className={loading ? 'pd-spin' : ''} />
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        {/* TAB 1: LIVE QUEUE */}
-        {tab === 'queue' && (
-          <div>
-            {/* Walk-in Fast Action Bar */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              borderRadius: '12px',
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              gap: '1rem',
-              flexWrap: 'wrap'
-            }}>
-              <div>
-                <strong style={{ fontSize: '0.9rem', color: '#38bdf8' }}>Walk-in Patient Verification</strong>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.15rem 0 0 0' }}>
-                  Ask the patient to show their Rxify Patient QR code or Prescription code to pull up their orders instantly.
-                </p>
-              </div>
-              <button
-                className="rx-scan-action-btn"
-                onClick={() => setShowScannerModal(true)}
-                style={{ padding: '0.45rem 1.1rem' }}
-              >
-                <Camera size={15} />
-                <span>Scan Walk-In QR</span>
-              </button>
-            </div>
-
-            {/* Filter Pills */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto' }}>
-              {['ALL', 'PENDING', 'PROCESSING', 'READY', 'DISPENSED', 'UNAVAILABLE', 'CANCELLED'].map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  style={{
-                    padding: '0.4rem 0.85rem',
-                    borderRadius: '2rem',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: statusFilter === st ? '#0ea5e9' : 'var(--surface-color)',
-                    color: statusFilter === st ? '#fff' : 'var(--text-secondary)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {st.replace('_', ' ')}
-                </button>
+      {/* Queue grid — table left, detail right */}
+      <div className={`disp-queue-wrap ${selectedReqId ? 'disp-queue-wrap--with-detail' : ''}`}>
+        {/* Table */}
+        <div>
+          {loading && !queue.length ? (
+            <div className="disp-table-wrap">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} style={{ height: 52, borderBottom: '1px solid var(--disp-border)', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 0.85rem' }}>
+                  <div className="disp-skeleton" style={{ width: 80, height: 14 }} />
+                  <div className="disp-skeleton" style={{ width: 120, height: 14 }} />
+                  <div className="disp-skeleton" style={{ width: 60, height: 14, marginLeft: 'auto' }} />
+                </div>
               ))}
             </div>
-
-            {/* Queue List & Drawer Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: selectedReqId ? '1fr 1.2fr' : '1fr', gap: '1.5rem' }}>
-              {/* Queue Items */}
-              <div>
-                {queue.length === 0 && !loading && (
-                  <div className="pd-empty" style={{ padding: '3rem 1rem' }}>
-                    <CheckCircle2 size={40} style={{ color: '#10b981', marginBottom: '0.5rem' }} />
-                    <p>Queue is empty! All requests processed.</p>
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gap: '0.75rem' }}>
-                  {queue.map((q) => (
-                    <div
-                      key={q.request_id}
-                      onClick={() => setSelectedReqId(q.request_id)}
-                      style={{
-                        padding: '1rem',
-                        borderRadius: '0.75rem',
-                        background: selectedReqId === q.request_id ? 'var(--surface-hover)' : 'var(--surface-color)',
-                        border: selectedReqId === q.request_id ? '2px solid #0ea5e9' : '1px solid var(--border-color)',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0ea5e9' }}>
-                          REQ #{q.request_id} · Rx #{q.prescription_id}
-                        </span>
-                        <span className={`pd-badge ${
-                          q.status === 'READY' ? 'pd-badge--emerald' :
-                          q.status === 'PROCESSING' ? 'pd-badge--sky' :
-                          q.status === 'PENDING' ? 'pd-badge--amber' : 'pd-badge--slate'
-                        }`}>
-                          {q.status}
-                        </span>
-                      </div>
-
-                      <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 0.2rem 0' }}>
-                        {q.patient_name}
-                      </h4>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        <span>Patient Code: <strong>{q.patient_code ?? `PT-${q.patient_id}`}</strong></span>
-                        <span>{q.total_items} prescribed item(s)</span>
-                      </div>
-                    </div>
-                  ))}
+          ) : queue.length === 0 ? (
+            <div className="disp-table-wrap">
+              <div className="disp-empty">
+                <Clock size={36} className="disp-empty-icon" />
+                <div className="disp-empty-title">Queue is clear</div>
+                <div className="disp-empty-sub">
+                  {statusFilter === 'ALL' ? 'No active requests at this time.' : `No ${statusFilter.toLowerCase()} requests.`}
                 </div>
               </div>
-
-              {/* Request Detail Drawer */}
-              {selectedReqId && selectedReqDetail && (
-                <div style={{
-                  padding: '1.5rem',
-                  borderRadius: '1rem',
-                  background: 'var(--surface-color)',
-                  border: '1px solid var(--border-color)',
-                  position: 'sticky',
-                  top: '1rem'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
-                      Request #{selectedReqDetail.request_id} Overview
-                    </h3>
-                    <button
-                      onClick={() => setSelectedReqId(null)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  {/* Patient Identity Banner */}
-                  <div style={{
-                    padding: '0.85rem 1rem',
-                    borderRadius: '0.75rem',
-                    background: 'rgba(14, 165, 233, 0.08)',
-                    border: '1px solid rgba(14, 165, 233, 0.2)',
-                    marginBottom: '1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem'
-                  }}>
-                    <ShieldCheck size={24} style={{ color: '#0ea5e9' }} />
-                    <div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {selectedReqDetail.patient_name}
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        ID Code: <strong>{selectedReqDetail.patient_code ?? `PT-${selectedReqDetail.patient_id}`}</strong> · Phone: {selectedReqDetail.patient_phone ?? '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Doctor & Diagnosis info */}
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                    <div>Prescribing Doctor: <strong>{selectedReqDetail.doctor_name ? `Dr. ${selectedReqDetail.doctor_name}` : 'Hospital Doctor'}</strong></div>
-                    <div>Diagnosis: <strong>{selectedReqDetail.diagnosis ?? 'General Prescription'}</strong></div>
-                  </div>
-
-                  {/* Itemized List */}
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>Prescribed Medicines</h4>
-                  <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                    {selectedReqDetail.items?.map((item) => (
-                      <div
-                        key={item.item_id}
-                        style={{
-                          padding: '0.6rem 0.8rem',
-                          borderRadius: '0.5rem',
-                          background: 'var(--surface-hover)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.prescribed_medicine_name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {item.dosage ?? 'As prescribed'} · Qty: {item.required_quantity}
-                          </div>
-                        </div>
-
-                        <span className={`pd-badge ${
-                          item.availability_status === 'AVAILABLE' || item.availability_status === 'DISPENSED'
-                            ? 'pd-badge--emerald'
-                            : item.availability_status === 'PARTIAL' ? 'pd-badge--amber' : 'pd-badge--rose'
-                        }`}>
-                          {item.availability_status}
-                          {item.reserved ? ' (Reserved)' : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Status Action Buttons */}
-                  <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    {selectedReqDetail.status === 'PENDING' && (
-                      <button
-                        className="auth-submit"
-                        onClick={() => handleProcess(selectedReqDetail.request_id)}
-                        disabled={actionLoading}
-                        style={{ background: '#0ea5e9' }}
-                      >
-                        Process & Reserve Stock
-                      </button>
-                    )}
-
-                    {selectedReqDetail.status === 'PROCESSING' && (
-                      <button
-                        className="auth-submit"
-                        onClick={() => handleMarkReady(selectedReqDetail.request_id)}
-                        disabled={actionLoading}
-                        style={{ background: '#10b981' }}
-                      >
-                        Mark Ready for Collection
-                      </button>
-                    )}
-
-                    {(selectedReqDetail.status === 'PROCESSING' || selectedReqDetail.status === 'READY') && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <textarea
-                          placeholder="Pharmacist dispensing notes (optional)..."
-                          value={dispenseNotes}
-                          onChange={(e) => setDispenseNotes(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '0.5rem',
-                            borderRadius: '0.5rem',
-                            border: '1px solid var(--border-color)',
-                            background: 'var(--surface-hover)',
-                            fontSize: '0.8rem',
-                            marginBottom: '0.5rem'
-                          }}
-                        />
-                        <button
-                          className="auth-submit"
-                          onClick={() => handleDispense(selectedReqDetail.request_id)}
-                          disabled={actionLoading}
-                          style={{ background: '#10b981' }}
-                        >
-                          Confirm & Dispense Stock
-                        </button>
-                      </div>
-                    )}
-
-                    {selectedReqDetail.status !== 'DISPENSED' && selectedReqDetail.status !== 'CANCELLED' && (
-                      <button
-                        className="pd-btn-sm"
-                        onClick={() => handleCancel(selectedReqDetail.request_id)}
-                        disabled={actionLoading}
-                        style={{ color: '#ef4444', border: '1px solid #ef4444', width: '100%', marginTop: '0.25rem' }}
-                      >
-                        Cancel Request
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-        )}
-
-        {/* TAB 2: INVENTORY */}
-        {tab === 'inventory' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div className="pd-search-wrap" style={{ flex: 1, maxWidth: '380px' }}>
-                <Search size={16} className="pd-search-icon" />
-                <input
-                  type="search"
-                  className="pd-search-input"
-                  placeholder="Search medicine stock by name or category..."
-                  value={invSearch}
-                  onChange={(e) => setInvSearch(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <label
-                  className="pd-btn-sm"
-                  style={{
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    padding: '0.5rem 1rem',
-                    background: 'var(--surface-color)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '0.5rem',
-                    fontSize: '0.85rem',
-                    fontWeight: 600
-                  }}
-                >
-                  <Upload size={15} style={{ color: '#0ea5e9' }} />
-                  <span>Import Inventory CSV</span>
-                  <input type="file" accept=".csv" onChange={handleCsvFileChange} style={{ display: 'none' }} />
-                </label>
-
-                <button
-                  className="auth-submit"
-                  onClick={() => setShowAddModal(true)}
-                  style={{ width: 'auto', padding: '0.5rem 1.25rem', background: '#0ea5e9' }}
-                >
-                  <Plus size={16} />
-                  <span>Add Medicine Stock</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Inventory Table */}
-            <div style={{ borderRadius: '0.75rem', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+          ) : (
+            <div className="disp-table-wrap">
+              <table className="disp-table">
                 <thead>
-                  <tr style={{ background: 'var(--surface-color)', textAlign: 'left', color: 'var(--text-secondary)' }}>
-                    <th style={{ padding: '0.75rem 1rem' }}>Medicine</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Form / Category</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Total Physical Stock</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Reserved Stock</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Free Stock</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Actions & Quick Stock Add</th>
+                  <tr>
+                    <th>Request / Rx</th>
+                    <th>Patient</th>
+                    <th>Items</th>
+                    <th>Received</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredInventory.map((item) => (
-                    <tr key={item.inventory_id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                        {item.generic_name}
-                        {item.brand_name && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '0.4rem' }}>({item.brand_name})</span>}
+                  {queue.map((q) => (
+                    <tr
+                      key={q.request_id}
+                      className={selectedReqId === q.request_id ? 'disp-table-row--selected' : ''}
+                      onClick={() => onSelectReq(q.request_id)}
+                    >
+                      <td>
+                        <div className="disp-cell-primary">Req #{q.request_id}</div>
+                        <div className="disp-cell-mono">Rx #{q.prescription_id}</div>
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>
-                        {item.form} · {item.category ?? 'General'}
+                      <td>
+                        <div className="disp-cell-primary">{q.patient_name}</div>
+                        <div className="disp-cell-secondary">{q.patient_code ?? `PT-${q.patient_id}`}</div>
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{item.available_quantity} {item.unit}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#f59e0b' }}>{item.reserved_quantity}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: item.free_stock > 0 ? '#10b981' : '#ef4444' }}>
-                        {item.free_stock}
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <span className={`pd-badge ${
-                          item.stock_status === 'NORMAL' ? 'pd-badge--emerald' :
-                          item.stock_status === 'LOW_STOCK' ? 'pd-badge--amber' : 'pd-badge--rose'
-                        }`}>
-                          {item.stock_status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                          <button
-                            className="pd-btn-sm"
-                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                            onClick={() => handleQuickAdd(item, 10)}
-                            title="Add 10 units"
-                          >
-                            +10
-                          </button>
-                          <button
-                            className="pd-btn-sm"
-                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                            onClick={() => handleQuickAdd(item, 50)}
-                            title="Add 50 units"
-                          >
-                            +50
-                          </button>
-                          <button
-                            className="pd-btn-sm"
-                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                            onClick={() => handleQuickAdd(item, 100)}
-                            title="Add 100 units"
-                          >
-                            +100
-                          </button>
-                          <button
-                            className="pd-btn-sm"
-                            style={{ background: 'var(--surface-color)' }}
-                            onClick={() => { setEditItem(item); setEditQty(item.available_quantity); }}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </td>
+                      <td style={{ color: 'var(--disp-text-sub)' }}>{q.total_items}</td>
+                      <td style={{ color: 'var(--disp-text-muted)', fontSize: '0.8rem' }}>{fmtRelTime(q.created_at)}</td>
+                      <td><RequestStatusBadge status={q.status} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+
+        {/* Detail panel */}
+        {selectedReqId && (
+          <div>
+            {!selectedReqDetail ? (
+              <div className="disp-detail">
+                <div className="disp-detail-header">
+                  <div className="disp-skeleton" style={{ width: 140, height: 16 }} />
+                </div>
+                <div className="disp-detail-body">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="disp-skeleton" style={{ height: 36 }} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <RequestDetailPanel
+                detail={selectedReqDetail}
+                loading={actionLoading || (detailLoading && (!selectedReqDetail.items || selectedReqDetail.items.length === 0))}
+                onClose={onCloseDetail}
+                onProcess={() => onProcess(selectedReqDetail.request_id)}
+                onMarkReady={() => onMarkReady(selectedReqDetail.request_id)}
+                onDispense={(notes) => onDispense(selectedReqDetail.request_id, notes)}
+                onCancel={() => onCancel(selectedReqDetail.request_id)}
+                toast={toast}
+              />
+            )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {/* TAB 3: DASHBOARD */}
-        {tab === 'dashboard' && stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-            {[
-              { label: 'Pending Requests', value: stats.pending, color: '#f59e0b' },
-              { label: 'Being Processed', value: stats.processing, color: '#0ea5e9' },
-              { label: 'Ready for Pickup', value: stats.ready, color: '#10b981' },
-              { label: 'Dispensed', value: stats.dispensed, color: '#64748b' },
-              { label: 'Out of Stock Alert', value: stats.out_of_stock, color: '#ef4444' },
-              { label: 'Low Stock Alert', value: stats.low_stock, color: '#f97316' },
-            ].map((st) => (
-              <div key={st.label} style={{ padding: '1.25rem', borderRadius: '0.75rem', background: 'var(--surface-color)', border: '1px solid var(--border-color)' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{st.label}</span>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: st.color, marginTop: '0.2rem' }}>{st.value}</div>
+// ─── Inventory Tab ────────────────────────────────────────────────────────────
+
+const INV_STOCK_FILTERS = ['ALL', 'NORMAL', 'LOW_STOCK', 'OUT_OF_STOCK'] as const;
+type InvStockFilter = typeof INV_STOCK_FILTERS[number];
+
+interface InventoryTabProps {
+  inventory: InventoryItem[];
+  loading: boolean;
+  error: string;
+  onReload: () => void;
+  toast: (msg: string, v?: any) => void;
+}
+
+function InventoryTab({ inventory, loading, error, onReload, toast }: InventoryTabProps) {
+  const [search, setSearch]         = useState('');
+  const [stockFilter, setStockFilter] = useState<InvStockFilter>('ALL');
+  const [showAdd, setShowAdd]       = useState(false);
+  const [editItem, setEditItem]     = useState<InventoryItem | null>(null);
+
+  const filtered = inventory.filter((i) => {
+    const matchSearch = !search.trim() ||
+      i.generic_name.toLowerCase().includes(search.toLowerCase()) ||
+      (i.brand_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (i.category ?? '').toLowerCase().includes(search.toLowerCase());
+    const matchFilter = stockFilter === 'ALL' || i.stock_status === stockFilter;
+    return matchSearch && matchFilter;
+  });
+
+  const quickAdd = async (item: InventoryItem, delta: number) => {
+    try {
+      await updateStockPartial(item.inventory_id, { available_quantity: Math.max(0, item.available_quantity + delta) });
+      toast(`+${delta} added to ${item.generic_name}`, 'ok');
+      onReload();
+    } catch (err: any) {
+      toast(err?.message ?? 'Update failed.', 'err');
+    }
+  };
+
+  const handleCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const res = await uploadInventoryCsv(file);
+      toast(res.message, 'ok');
+      onReload();
+    } catch (err: any) {
+      toast(err?.message ?? 'CSV import failed.', 'err');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <div className="disp-section">
+      {error && <div className="disp-error-bar"><XCircle size={14} />{error}</div>}
+
+      {/* Toolbar */}
+      <div className="disp-toolbar">
+        <div className="disp-search-wrap">
+          <Search size={14} className="disp-search-icon" />
+          <input
+            type="search"
+            className="disp-search-input"
+            placeholder="Search medicines…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="disp-filter-bar">
+          {INV_STOCK_FILTERS.map((f) => (
+            <button
+              key={f}
+              className={`disp-filter-pill ${stockFilter === f ? 'disp-filter-pill--active' : ''}`}
+              onClick={() => setStockFilter(f)}
+            >
+              {f === 'ALL' ? 'All' : f === 'NORMAL' ? 'In Stock' : f === 'LOW_STOCK' ? 'Low Stock' : 'Out of Stock'}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <label className="disp-btn disp-btn--ghost" style={{ cursor: 'pointer' }}>
+            <Upload size={14} /> Import CSV
+            <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsv} />
+          </label>
+          <button className="disp-btn disp-btn--primary" onClick={() => setShowAdd(true)}>
+            <Plus size={14} /> Add Medicine
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {loading && !inventory.length ? (
+        <div className="disp-table-wrap">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} style={{ height: 48, borderBottom: '1px solid var(--disp-border)', padding: '0 0.85rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div className="disp-skeleton" style={{ width: 180, height: 13 }} />
+              <div className="disp-skeleton" style={{ width: 80, height: 13, marginLeft: 'auto' }} />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="disp-table-wrap">
+          <div className="disp-empty">
+            <Package size={36} className="disp-empty-icon" />
+            <div className="disp-empty-title">{inventory.length === 0 ? 'No stock yet' : 'No matches'}</div>
+            <div className="disp-empty-sub">
+              {inventory.length === 0
+                ? 'Add medicines from the catalog to start tracking inventory.'
+                : 'Adjust your search or filter.'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="disp-table-wrap">
+          <table className="disp-table">
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Form / Category</th>
+                <th style={{ textAlign: 'right' }}>Physical</th>
+                <th style={{ textAlign: 'right' }}>Reserved</th>
+                <th style={{ textAlign: 'right' }}>Free</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => (
+                <tr key={item.inventory_id}>
+                  <td>
+                    <div className="disp-cell-primary">{item.generic_name}</div>
+                    {item.brand_name && <div className="disp-cell-secondary">{item.brand_name}</div>}
+                    {item.strength && <div className="disp-cell-secondary">{item.strength}</div>}
+                  </td>
+                  <td style={{ color: 'var(--disp-text-sub)', fontSize: '0.82rem' }}>
+                    {item.form}{item.category ? ` · ${item.category}` : ''}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {item.available_quantity}
+                    {item.unit && <span style={{ fontSize: '0.75rem', color: 'var(--disp-text-muted)', marginLeft: 4 }}>{item.unit}</span>}
+                  </td>
+                  <td style={{ textAlign: 'right', color: item.reserved_quantity > 0 ? 'var(--disp-warn-text)' : 'var(--disp-text-muted)' }}>
+                    {item.reserved_quantity}
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: item.free_stock > 0 ? 'var(--disp-ok-text)' : 'var(--disp-err-text)' }}>
+                    {item.free_stock}
+                  </td>
+                  <td><StockStatusBadge status={item.stock_status} /></td>
+                  <td>
+                    <div className="disp-inv-actions-col">
+                      <button className="disp-btn disp-btn--ghost disp-btn--sm" onClick={() => quickAdd(item, 10)} title="Add 10">+10</button>
+                      <button className="disp-btn disp-btn--ghost disp-btn--sm" onClick={() => quickAdd(item, 50)} title="Add 50">+50</button>
+                      <button className="disp-btn disp-btn--ghost disp-btn--sm" onClick={() => setEditItem(item)}>Edit</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showAdd && <AddStockModal onClose={() => setShowAdd(false)} onSuccess={onReload} toast={toast} />}
+      {editItem && <EditStockModal item={editItem} onClose={() => setEditItem(null)} onSuccess={onReload} toast={toast} />}
+    </div>
+  );
+}
+
+// ─── Dashboard Tab ────────────────────────────────────────────────────────────
+
+interface DashboardTabProps {
+  stats: DispensaryDashboardStats | null;
+  alerts: any[];
+  statsLoading: boolean;
+  onReplenish: (item: any) => void;
+}
+
+function DashboardTab({ stats, alerts, statsLoading, onReplenish }: DashboardTabProps) {
+  if (statsLoading && !stats) {
+    return (
+      <div className="disp-section">
+        <div className="disp-stats-strip">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="disp-stat-cell">
+              <div className="disp-skeleton" style={{ height: 12, width: 80, marginBottom: 8 }} />
+              <div className="disp-skeleton" style={{ height: 28, width: 50 }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="disp-section">
+      {/* Stats strip */}
+      {stats && (
+        <>
+          <div className="disp-section-heading">Request Queue</div>
+          <div className="disp-stats-strip">
+            <div className="disp-stat-cell disp-stat-cell--warn">
+              <div className="disp-stat-label">Pending</div>
+              <div className="disp-stat-value">{stats.pending}</div>
+            </div>
+            <div className="disp-stat-cell disp-stat-cell--info">
+              <div className="disp-stat-label">Processing</div>
+              <div className="disp-stat-value">{stats.processing}</div>
+            </div>
+            <div className="disp-stat-cell disp-stat-cell--ok">
+              <div className="disp-stat-label">Ready</div>
+              <div className="disp-stat-value">{stats.ready}</div>
+            </div>
+            <div className="disp-stat-cell">
+              <div className="disp-stat-label">Dispensed</div>
+              <div className="disp-stat-value">{stats.dispensed}</div>
+            </div>
+          </div>
+
+          <div className="disp-section-heading" style={{ marginTop: '0.5rem' }}>Inventory Alerts</div>
+          <div className="disp-stats-strip">
+            <div className="disp-stat-cell disp-stat-cell--err">
+              <div className="disp-stat-label">Out of Stock</div>
+              <div className="disp-stat-value">{stats.out_of_stock}</div>
+            </div>
+            <div className="disp-stat-cell disp-stat-cell--warn">
+              <div className="disp-stat-label">Low Stock</div>
+              <div className="disp-stat-value">{stats.low_stock}</div>
+            </div>
+            <div className="disp-stat-cell">
+              <div className="disp-stat-label">Total Medicines</div>
+              <div className="disp-stat-value">{stats.total_medicines}</div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Alert list */}
+      {alerts.length > 0 && (
+        <>
+          <div className="disp-section-heading" style={{ marginTop: '0.5rem' }}>Stock Alerts</div>
+          <div className="disp-alert-list">
+            {alerts.map((a: any) => (
+              <div
+                key={a.inventory_id}
+                className={`disp-alert-row ${a.stock_status === 'OUT_OF_STOCK' ? 'disp-alert-row--out' : 'disp-alert-row--low'}`}
+              >
+                <div>
+                  <div className="disp-alert-medicine">
+                    {a.generic_name}{a.brand_name ? ` (${a.brand_name})` : ''}
+                  </div>
+                  <div className="disp-alert-detail">
+                    Free: {a.free_stock} {a.unit} · Reorder at: {a.reorder_level}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div className={`disp-alert-qty ${a.free_stock === 0 ? '' : ''}`} style={{ color: a.free_stock === 0 ? 'var(--disp-err-text)' : 'var(--disp-warn-text)' }}>
+                    {a.free_stock} left
+                  </div>
+                  <button className="disp-btn disp-btn--ghost disp-btn--sm" onClick={() => onReplenish(a)}>
+                    Replenish
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-        )}
+        </>
+      )}
 
-        {/* TAB 4: ALERTS */}
-        {tab === 'alerts' && (
-          <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem' }}>Low Stock & Out of Stock Warnings</h3>
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
-              {alerts.map((a: any) => (
-                <div key={a.inventory_id} style={{ padding: '1rem', borderRadius: '0.75rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontWeight: 700, color: '#ef4444' }}>{a.generic_name} {a.brand_name ? `(${a.brand_name})` : ''}</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      Free Stock: <strong>{a.free_stock} {a.unit}</strong> · Reorder Threshold: {a.reorder_level}
-                    </p>
-                  </div>
-                  <button
-                    className="auth-submit"
-                    style={{ width: 'auto', background: '#10b981', padding: '0.4rem 1rem' }}
-                    onClick={() => { setEditItem(a); setEditQty(a.available_quantity + 100); }}
-                  >
-                    Replenish Stock (+100)
-                  </button>
-                </div>
-              ))}
+      {alerts.length === 0 && stats && (
+        <div className="disp-empty" style={{ paddingTop: '1.5rem' }}>
+          <AlertTriangle size={28} className="disp-empty-icon" />
+          <div className="disp-empty-title">No stock alerts</div>
+          <div className="disp-empty-sub">All medicines are above their reorder thresholds.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Shell ───────────────────────────────────────────────────────────────
+
+export default function DispensaryPortal() {
+  const { clearAuth }  = useAuthStore();
+  const navigate       = useNavigate();
+  const { toasts, push: toast } = useToast();
+
+  const [dark, setDark]         = useState(() => localStorage.getItem('rxify-theme') === 'dark');
+  const [profile, setProfile]   = useState<DispensaryProfile | null>(null);
+  const [tab, setTab]           = useState<Tab>('queue');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showShareModal, setShowShareModal]   = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+
+  /* Queue */
+  const [queue, setQueue]               = useState<QueueItemSummary[]>([]);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [selectedReqId, setSelectedReqId]       = useState<number | null>(null);
+  const [selectedReqDetail, setSelectedReqDetail] = useState<RequestDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  /* Inventory */
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  /* Dashboard */
+  const [stats, setStats]   = useState<DispensaryDashboardStats | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [editReplenish, setEditReplenish] = useState<InventoryItem | null>(null);
+
+  /* Loading/Error per tab */
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+
+  /* Theme */
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    localStorage.setItem('rxify-theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  /* Auth check */
+  useEffect(() => {
+    fetchDispensaryProfile()
+      .then(setProfile)
+      .catch(() => { clearAuth(); navigate({ to: '/dispensary/login' }); });
+  }, [clearAuth, navigate]);
+
+  /* Detail cache to make clicking tickets 100% instant */
+  const detailCacheRef = useRef<Map<number, RequestDetail>>(new Map());
+
+  /* Queue filtered client-side for 0ms filter pill switching */
+  const filteredQueue = useMemo(() => {
+    if (statusFilter === 'ALL') return queue;
+    return queue.filter((q) => q.status === statusFilter);
+  }, [queue, statusFilter]);
+
+  /* Load tab data */
+  const loadTabData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError('');
+    try {
+      if (tab === 'queue') {
+        const q = await fetchDispensaryQueue();
+        setQueue(q);
+      } else if (tab === 'inventory') {
+        const inv = await fetchInventory();
+        setInventory(inv);
+      } else if (tab === 'dashboard') {
+        const [s, a] = await Promise.all([fetchDispensaryDashboardStats(), fetchDispensaryAlerts()]);
+        setStats(s);
+        setAlerts(a.alerts ?? []);
+      }
+    } catch (err: any) {
+      if (!silent) setError(err?.message ?? 'Failed to load data.');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    loadTabData(false);
+    const interval = setInterval(() => loadTabData(true), 20000);
+    return () => clearInterval(interval);
+  }, [loadTabData]);
+
+  /* Load detail when queue item selected with optimistic instant UI and caching */
+  const loadDetail = useCallback(async (id: number) => {
+    try {
+      const d = await fetchDispensaryRequestDetail(id);
+      detailCacheRef.current.set(id, d);
+      setSelectedReqDetail(d);
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to load request.', 'err');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [toast]);
+
+  const handleSelectReq = (id: number) => {
+    setSelectedReqId(id);
+
+    // 1. Instant cache hit
+    if (detailCacheRef.current.has(id)) {
+      setSelectedReqDetail(detailCacheRef.current.get(id)!);
+      setDetailLoading(false);
+      // Background silent revalidation
+      fetchDispensaryRequestDetail(id)
+        .then((fresh) => {
+          detailCacheRef.current.set(id, fresh);
+          setSelectedReqDetail(fresh);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // 2. Optimistic initial render from queue summary item
+    const summary = queue.find((q) => q.request_id === id);
+    if (summary) {
+      setSelectedReqDetail({
+        request_id: summary.request_id,
+        prescription_id: summary.prescription_id,
+        dispensary_id: profile?.dispensary_id ?? 0,
+        dispensary_name: profile?.name ?? '',
+        dispensary_location: profile?.location ?? null,
+        patient_id: summary.patient_id,
+        patient_code: summary.patient_code,
+        patient_name: summary.patient_name,
+        patient_email: '',
+        patient_phone: null,
+        patient_dob: null,
+        issue_date: null,
+        diagnosis: null,
+        prescription_notes: null,
+        doctor_name: null,
+        doctor_specialty: null,
+        status: summary.status,
+        estimated_ready_at: summary.estimated_ready_at,
+        ready_at: null,
+        dispensed_at: null,
+        notes: null,
+        created_at: summary.created_at,
+        items: [],
+      });
+    } else {
+      setSelectedReqDetail(null);
+    }
+
+    // 3. Fetch full line items and complete detail
+    setDetailLoading(true);
+    loadDetail(id);
+  };
+
+  /* Actions */
+  const withAction = async (fn: () => Promise<void>) => {
+    setActionLoading(true);
+    try { await fn(); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleProcess = (id: number) => withAction(async () => {
+    const res = await processDispensaryRequest(id);
+    toast('Request is now processing. Stock reserved.', 'ok');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
+  const handleMarkReady = (id: number) => withAction(async () => {
+    const res = await markDispensaryRequestReady(id);
+    toast('Marked ready for collection.', 'ok');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
+  const handleDispense = (id: number, notes: string) => withAction(async () => {
+    const res = await dispenseDispensaryRequest(id, notes);
+    toast('Medicines dispensed. Stock updated.', 'ok');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
+  const handleCancel = (id: number) => withAction(async () => {
+    const res = await cancelDispensaryRequest(id);
+    toast('Request cancelled. Reserved stock released.', 'info');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
+  const handleLogout = () => { clearAuth(); navigate({ to: '/dispensary/login' }); };
+
+  const NAV: { id: Tab; label: string; desc: string; icon: React.ReactNode }[] = [
+    { id: 'queue',     label: 'Live Queue',    desc: 'Prescription fulfilment', icon: <Clock size={18} /> },
+    { id: 'inventory', label: 'Medicine Stock', desc: 'Inventory & reservations', icon: <Package size={18} /> },
+    { id: 'dashboard', label: 'Dashboard',      desc: 'Stats & stock alerts',    icon: <LayoutDashboard size={18} /> },
+    { id: 'profile',   label: 'Profile',        desc: 'Location & settings',     icon: <MapPin size={18} /> },
+  ];
+
+  const PAGE_TITLES: Record<Tab, string> = {
+    queue:     'Prescription Queue',
+    inventory: 'Medicine Stock',
+    dashboard: 'Dashboard',
+    profile:   'Dispensary Profile',
+  };
+
+  const dispCode = profile?.dispensary_code ?? (profile?.dispensary_id ? `RXF-DISP-${profile.dispensary_id}` : 'Dispensary ID');
+
+  return (
+    <div className="pd-shell" data-theme={dark ? 'dark' : 'light'}>
+
+      {/* ── Mobile overlay ── */}
+      {sidebarOpen && (
+        <div className="pd-overlay" onClick={() => setSidebarOpen(false)} style={{ zIndex: 99 }} />
+      )}
+
+      {/* ── Sidebar ── */}
+      <aside className={`pd-sidebar ${sidebarOpen ? 'pd-sidebar--open' : ''}`}>
+        <div className="pd-logo">
+          <div className="pd-logo-icon"><Building2 size={18} color="#fff" /></div>
+          <span className="pd-logo-text">Dispensary</span>
+        </div>
+
+        <nav className="pd-nav">
+          <p className="pd-nav-label">Pharmacy</p>
+          {NAV.map((n) => (
+            <button
+              key={n.id}
+              className={`pd-nav-item ${tab === n.id ? 'pd-nav-item--active' : ''}`}
+              onClick={() => { setTab(n.id); setSidebarOpen(false); }}
+            >
+              <div className="pd-nav-indicator" />
+              {n.icon}
+              <span className="pd-nav-text">
+                <span className="pd-nav-label-text">{n.label}</span>
+                <span className="pd-nav-desc">{n.desc}</span>
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="pd-sidebar-footer">
+          <div className="pd-user-row">
+            <div className="pd-avatar">{(profile?.name ?? 'DP').slice(0, 2).toUpperCase()}</div>
+            <div className="pd-user-info">
+              <span className="pd-user-name">{profile?.name ?? 'Dispensary'}</span>
+              <span className="pd-user-role">{profile?.location ?? 'Pharmacy'}</span>
             </div>
           </div>
+          <div className="pd-footer-actions">
+            <button className="pd-icon-btn" onClick={() => setDark((d) => !d)} title="Toggle theme">
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button className="pd-logout-btn" onClick={handleLogout}>
+              <LogOut size={15} /> Log out
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <main className="pd-main">
+        {/* Mobile topbar */}
+        <div className="pd-topbar">
+          <button className="pd-menu-btn" onClick={() => setSidebarOpen(true)}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div className="pd-topbar-logo"><Building2 size={16} />Dispensary</div>
+          <button className="pd-icon-btn" onClick={() => setShowScannerModal(true)}><QrCode size={18} /></button>
+        </div>
+
+        {/* Page header */}
+        <div className="disp-page-header">
+          <div>
+            <h1 className="disp-page-title">{PAGE_TITLES[tab]}</h1>
+            <p className="disp-page-sub">
+              {profile?.name ?? ''}
+              {profile?.operating_hours ? ` · ${profile.operating_hours}` : ''}
+            </p>
+          </div>
+
+          <div className="disp-header-actions">
+            <button className="disp-btn disp-btn--ghost" style={{ fontSize: '0.78rem' }} onClick={() => setShowShareModal(true)}>
+              <ShieldCheck size={13} /> {dispCode}
+            </button>
+            <button className="disp-btn disp-btn--ghost" onClick={() => setShowScannerModal(true)}>
+              <Camera size={14} /> Scan
+            </button>
+            <button className="disp-btn disp-btn--ghost" onClick={() => loadTabData()} title="Refresh">
+              <RefreshCw size={14} className={loading ? 'disp-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Tab content */}
+        {tab === 'queue' && (
+          <QueueTab
+            queue={filteredQueue}
+            loading={loading}
+            error={error}
+            statusFilter={statusFilter}
+            onFilterChange={setStatusFilter}
+            selectedReqId={selectedReqId}
+            selectedReqDetail={selectedReqDetail}
+            detailLoading={detailLoading}
+            onSelectReq={handleSelectReq}
+            onCloseDetail={() => { setSelectedReqId(null); setSelectedReqDetail(null); }}
+            onProcess={handleProcess}
+            onMarkReady={handleMarkReady}
+            onDispense={handleDispense}
+            onCancel={handleCancel}
+            actionLoading={actionLoading}
+            onScanOpen={() => setShowScannerModal(true)}
+            toast={toast}
+          />
+        )}
+
+        {tab === 'inventory' && (
+          <InventoryTab
+            inventory={inventory}
+            loading={loading}
+            error={error}
+            onReload={loadTabData}
+            toast={toast}
+          />
+        )}
+
+        {tab === 'dashboard' && (
+          <DashboardTab
+            stats={stats}
+            alerts={alerts}
+            statsLoading={loading}
+            onReplenish={(a) => setEditReplenish(a as InventoryItem)}
+          />
+        )}
+
+        {tab === 'profile' && (
+          <ProfileTab
+            profile={profile}
+            onProfileUpdate={(updated) => setProfile(updated)}
+            toast={toast}
+          />
         )}
       </main>
 
-      {/* ADD STOCK MODAL */}
-      {showAddModal && (
-        <div className="pd-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'var(--surface-color)', width: '90%', maxWidth: '500px' }}>
-            <h3 style={{ margin: '0 0 1rem 0' }}>Add Medicine to Dispensary Stock</h3>
-            <form onSubmit={handleAddStockSubmit}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Search Central Medicine Catalog</label>
-              <input
-                type="search"
-                className="pd-search-input"
-                placeholder="Type medicine name..."
-                value={catSearch}
-                onChange={(e) => setCatSearch(e.target.value)}
-                style={{ width: '100%', margin: '0.4rem 0 1rem 0' }}
-              />
-
-              {/* Search Results */}
-              <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '1rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem' }}>
-                {catResults.map((m) => (
-                  <div
-                    key={m.medicine_id}
-                    onClick={() => setSelectedMed(m)}
-                    style={{
-                      padding: '0.5rem 0.75rem',
-                      cursor: 'pointer',
-                      background: selectedMed?.medicine_id === m.medicine_id ? '#0ea5e9' : 'transparent',
-                      color: selectedMed?.medicine_id === m.medicine_id ? '#fff' : 'var(--text-primary)',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    {m.generic_name} {m.brand_name ? `(${m.brand_name})` : ''} · {m.strength ?? ''}
-                  </div>
-                ))}
-              </div>
-
-              {selectedMed && (
-                <div style={{ fontSize: '0.85rem', color: '#10b981', marginBottom: '1rem' }}>
-                  Selected: <strong>{selectedMed.generic_name}</strong>
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Initial Quantity</label>
-                  <input
-                    type="number"
-                    className="auth-input"
-                    value={addQty}
-                    onChange={(e) => setAddQty(Number(e.target.value))}
-                    min={0}
-                    required
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Reorder Threshold</label>
-                  <input
-                    type="number"
-                    className="auth-input"
-                    value={addReorder}
-                    onChange={(e) => setAddReorder(Number(e.target.value))}
-                    min={0}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="pd-btn-sm" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="auth-submit" style={{ width: 'auto', background: '#0ea5e9' }}>Save Stock</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT STOCK MODAL */}
-      {editItem && (
-        <div className="pd-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'var(--surface-color)', width: '90%', maxWidth: '400px' }}>
-            <h3 style={{ margin: '0 0 1rem 0' }}>Update Physical Stock</h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{editItem.generic_name}</p>
-
-            <form onSubmit={handleEditStockSubmit}>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Physical Quantity</label>
-              <input
-                type="number"
-                className="auth-input"
-                value={editQty}
-                onChange={(e) => setEditQty(Number(e.target.value))}
-                min={0}
-                required
-                style={{ margin: '0.4rem 0 1rem 0' }}
-              />
-
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="pd-btn-sm" onClick={() => setEditItem(null)}>Cancel</button>
-                <button type="submit" className="auth-submit" style={{ width: 'auto', background: '#0ea5e9' }}>Update Quantity</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Share Dispensary ID & QR Modal */}
+      {/* Modals */}
       <ShareIdModal
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
         role="dispensary"
-        code={profile?.dispensary_code || (profile?.dispensary_id ? `RXF-DISP-${profile.dispensary_id}` : 'RXF-DISP-1')}
-        name={profile?.name || 'Dispensary Pharmacy'}
-        subtitle="Patients and doctors can scan this code to route prescriptions and check medication inventory."
+        code={dispCode}
+        name={profile?.name ?? 'Dispensary Pharmacy'}
+        subtitle="Patients and doctors can scan this code to route prescriptions."
         details={[
-          { label: 'Dispensary Code', value: profile?.dispensary_code || `RXF-DISP-${profile?.dispensary_id || 1}` },
-          { label: 'Location', value: profile?.location || 'Main Hospital Wing' },
-          { label: 'Operating Hours', value: profile?.operating_hours || 'Daily' },
-          { label: 'Network', value: 'Rxify Verified Pharmacy Unit' },
+          { label: 'Dispensary Code', value: dispCode },
+          { label: 'Location',        value: profile?.location ?? '—' },
+          { label: 'Operating Hours', value: profile?.operating_hours ?? '—' },
+          { label: 'Network',         value: 'Rxify Verified Pharmacy' },
         ]}
       />
 
-      {/* Universal QR Scanner Modal */}
       <QrScannerModal
         isOpen={showScannerModal}
         onClose={() => setShowScannerModal(false)}
@@ -945,11 +864,22 @@ export default function DispensaryPortal() {
           if (actionType === 'dispensary_open_requests' && payload?.requests?.[0]) {
             const req = payload.requests[0];
             setSelectedReqId(req.request_id);
-            fetchDispensaryRequestDetail(req.request_id).then(setSelectedReqDetail).catch(() => {});
+            loadDetail(req.request_id);
             setTab('queue');
           }
         }}
       />
+
+      {editReplenish && (
+        <EditStockModal
+          item={editReplenish}
+          onClose={() => setEditReplenish(null)}
+          onSuccess={() => { loadTabData(); setEditReplenish(null); }}
+          toast={toast}
+        />
+      )}
+
+      <ToastStack toasts={toasts} />
     </div>
   );
 }
