@@ -40,7 +40,15 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 logger = logging.getLogger(__name__)
 
 API_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
-DEFAULT_MODEL = "gemini-3-flash-preview"
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+FALLBACK_MODELS = [
+    DEFAULT_MODEL,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+]
 
 # Retry settings (only for transient API errors, not validation failures)
 _MAX_RETRIES = 2
@@ -187,12 +195,14 @@ class MedicationItem(BaseModel):
     """A single medication entry extracted from the prescription."""
 
     raw_name: str = Field(..., description="Medicine name exactly as read from the image.")
-    dosage: Optional[str] = Field(None, description="Dose/strength as written.")
-    frequency: Optional[str] = Field(None, description="How often, converted to plain English.")
-    duration: Optional[str] = Field(None, description="Explicitly written duration only.")
-    instructions: Optional[str] = Field(None, description="Additional administration instructions.")
-    form: Optional[str] = Field(None, description="Dosage form (tablet, capsule, ...).")
-    route: Optional[str] = Field(None, description="Route of administration (oral, topical, ...).")
+    dosage: Optional[str] = Field(None, description="Dose/strength as written (e.g. 500 mg, 625 mg, 0.5%).")
+    frequency: Optional[str] = Field(None, description="How often, converted to plain English (e.g. twice daily).")
+    frequency_raw: Optional[str] = Field(None, description="Literal shorthand written (e.g. 1-0-1, BD, TDS, SOS).")
+    duration: Optional[str] = Field(None, description="Duration of therapy (e.g. 5 days, 2 weeks, ongoing).")
+    quantity: Optional[str] = Field(None, description="Total dispense quantity if written (e.g. #10 tabs, 1 bottle).")
+    instructions: Optional[str] = Field(None, description="Timing/food administration instructions (e.g. after food).")
+    form: Optional[str] = Field(None, description="Dosage form (tablet, capsule, syrup, ointment, etc.).")
+    route: Optional[str] = Field(None, description="Route of administration (oral, topical, inhalation, etc.).")
     extraction_confidence: ConfidenceLevel = Field(
         "medium",
         description="Readability confidence: high | medium | low.",
@@ -212,7 +222,11 @@ class MedicationItem(BaseModel):
             raise ValueError("raw_name must not be empty")
         return v
 
-    @field_validator("dosage", "frequency", "duration", "instructions", "form", "route", mode="before")
+    @field_validator(
+        "dosage", "frequency", "frequency_raw", "duration", "quantity",
+        "instructions", "form", "route",
+        mode="before",
+    )
     @classmethod
     def coerce_empty_to_none(cls, v: Any) -> Any:
         if isinstance(v, str) and not v.strip():
@@ -223,7 +237,9 @@ class MedicationItem(BaseModel):
         """Apply normalisation rules to mutable fields after validation."""
         self.dosage = _normalise_dosage(self.dosage)
         self.frequency = _normalise_whitespace(self.frequency)
+        self.frequency_raw = _normalise_whitespace(self.frequency_raw)
         self.duration = _normalise_whitespace(self.duration)
+        self.quantity = _normalise_whitespace(self.quantity)
         self.instructions = _normalise_whitespace(self.instructions)
         self.form = _normalise_form(self.form)
         self.route = _normalise_whitespace(self.route)
@@ -246,21 +262,30 @@ class PrescriptionData(BaseModel):
     """Top-level prescription extracted from the image."""
 
     doctor_name: Optional[str] = None
+    doctor_degree: Optional[str] = None
+    doctor_reg_number: Optional[str] = None
     clinic_name: Optional[str] = None
+    clinic_address: Optional[str] = None
     patient_name: Optional[str] = None
     patient_age: Optional[str] = None
     patient_gender: Optional[str] = None
+    patient_weight: Optional[str] = None
+    vitals: Optional[str] = None
+    chief_complaints: Optional[str] = None
     issue_date: Optional[str] = None
     follow_up_date: Optional[str] = None
     diagnosis: Optional[str] = None
+    investigations_advised: Optional[List[str]] = Field(default_factory=list)
+    dietary_lifestyle_advice: Optional[str] = None
     medications: List[MedicationItem] = Field(default_factory=list)
     notes: Optional[str] = None
     raw_text: Optional[str] = None
 
     @field_validator(
-        "doctor_name", "clinic_name", "patient_name", "patient_age",
-        "patient_gender", "issue_date", "follow_up_date", "diagnosis",
-        "notes", "raw_text",
+        "doctor_name", "doctor_degree", "doctor_reg_number", "clinic_name", "clinic_address",
+        "patient_name", "patient_age", "patient_gender", "patient_weight",
+        "vitals", "chief_complaints", "issue_date", "follow_up_date", "diagnosis",
+        "dietary_lifestyle_advice", "notes", "raw_text",
         mode="before",
     )
     @classmethod
@@ -283,16 +308,27 @@ class PrescriptionData(BaseModel):
 _GEMINI_RESPONSE_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
-        "doctor_name":    {"type": "string", "nullable": True},
-        "clinic_name":    {"type": "string", "nullable": True},
-        "patient_name":   {"type": "string", "nullable": True},
-        "patient_age":    {"type": "string", "nullable": True},
-        "patient_gender": {"type": "string", "nullable": True},
-        "issue_date":     {"type": "string", "nullable": True},
-        "follow_up_date": {"type": "string", "nullable": True},
-        "diagnosis":      {"type": "string", "nullable": True},
-        "notes":          {"type": "string", "nullable": True},
-        "raw_text":       {"type": "string", "nullable": True},
+        "doctor_name":              {"type": "string", "nullable": True},
+        "doctor_degree":            {"type": "string", "nullable": True},
+        "doctor_reg_number":        {"type": "string", "nullable": True},
+        "clinic_name":              {"type": "string", "nullable": True},
+        "clinic_address":           {"type": "string", "nullable": True},
+        "patient_name":             {"type": "string", "nullable": True},
+        "patient_age":              {"type": "string", "nullable": True},
+        "patient_gender":           {"type": "string", "nullable": True},
+        "patient_weight":           {"type": "string", "nullable": True},
+        "vitals":                   {"type": "string", "nullable": True},
+        "chief_complaints":         {"type": "string", "nullable": True},
+        "issue_date":               {"type": "string", "nullable": True},
+        "follow_up_date":           {"type": "string", "nullable": True},
+        "diagnosis":                {"type": "string", "nullable": True},
+        "investigations_advised":   {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "dietary_lifestyle_advice": {"type": "string", "nullable": True},
+        "notes":                    {"type": "string", "nullable": True},
+        "raw_text":                 {"type": "string", "nullable": True},
         "medications": {
             "type": "array",
             "items": {
@@ -301,7 +337,9 @@ _GEMINI_RESPONSE_SCHEMA: Dict[str, Any] = {
                     "raw_name":              {"type": "string"},
                     "dosage":                {"type": "string", "nullable": True},
                     "frequency":             {"type": "string", "nullable": True},
+                    "frequency_raw":         {"type": "string", "nullable": True},
                     "duration":              {"type": "string", "nullable": True},
+                    "quantity":              {"type": "string", "nullable": True},
                     "instructions":          {"type": "string", "nullable": True},
                     "form":                  {"type": "string", "nullable": True},
                     "route":                 {"type": "string", "nullable": True},
@@ -322,90 +360,70 @@ _GEMINI_RESPONSE_SCHEMA: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 EXTRACTION_PROMPT = """\
-You are a medical prescription extraction system.
+You are an expert clinical pharmacist and senior medical transcription specialist.
+Your task is to transcribe and extract ALL medical information from this prescription image with extreme clinical fidelity.
 
-Extract the information that is VISIBLY PRESENT in the prescription image.
-The handwriting may be unclear, abbreviated, misspelled, or partially unreadable.
+STEP 1: CLINICAL CONTEXT & VERBATIM TRANSCRIPTION
+First, identify the clinical environment from the letterhead/header to guide your handwriting interpretation:
+- Clinic Specialty (e.g. Chest & TB / Pulmonology, Cardiology, Gastroenterology, Orthopedics, ENT, Pediatrics, Gynecology, General Medicine).
+- Doctor credentials and registration number (e.g. MD Pulmonary Medicine, MBBS, DGO).
+- Clinical Vitals & Notes (BP, Pulse, SpO2, Weight, chief complaints, provisional diagnosis).
+Transcribe every legible line verbatim into the `raw_text` field.
 
-IMPORTANT RULES:
-1. Do NOT guess or hallucinate missing information.
-2. Do NOT correct a medicine name to what you think the doctor intended.
-3. Preserve medicine names as they appear/read from the prescription.
-4. If a medicine name is unclear, return your best transcription but mark its confidence as "low".
-5. Do NOT use medical knowledge to invent missing dosage, frequency, duration, strength, or instructions.
-6. Do NOT infer duration from quantity or dosage. Only extract duration if it is explicitly written.
-7. Distinguish medicine names from dosage-form prefixes such as:
-   - Tab / Tablet
-   - Cap / Capsule
-   - Inj / Injection
-   - Syr / Syrup
-8. Keep brand names exactly as extracted. Do not convert brand names into generic names.
-9. Combination medicines must remain a single medication unless the prescription explicitly lists them separately.
-10. If something clearly does not appear to be a medicine, do not force it into the medications list.
-11. Preserve abbreviations such as SR, CR, ER, LB, D, etc. when they are part of the written medicine name.
-12. Do not assume that similar-looking text is a known medicine.
+STEP 2: CLINICAL STRUCTURED EXTRACTION & CO-OCCURRENCE REASONING
+Use medical knowledge and clinical context to decipher difficult cursive doctor handwriting:
+- In a CHEST & TB / PULMONOLOGY clinic (with Sputum, Asthma, Cough, SpO2):
+  Expect bronchodilators (Doxolin / Doxofylline, Deriphyllin, Asthalin), inhaled corticosteroids/LABA (Budecort, Budetrol, Foracort, Duolin), leukotriene antagonists (Montek-LC, Montair-LC, Montas-L), mucolytics (Pulmoclear / Acebrophylline, Mucinac), and gastro-protective PPIs (Razo-D, Pan-D).
+- In a GASTROENTEROLOGY clinic:
+  Expect PPIs with prokinetics (Pan-D, Razo-D, Omez-D), antacids (Sucrafil-O), antispasmodics, antiemetics (Emeset).
+- In an ORTHOPEDIC / PAIN clinic:
+  Expect NSAIDs (Zerodol-P, Zerodol-SP, Hifenac), enzymes (Chymoral Forte), muscle relaxants (Thiocolchicoside), Calcium (Shelcal).
 
-For every medication, extract both the raw transcription and structured information.
+--- CRITICAL RULES FOR HANDWRITING & PHARMACOLOGICAL SHORTHAND ---
 
-FIELD RULES:
+1. ZERO-DROP MANDATE (DO NOT SKIP ANY MEDICATIONS):
+   Every numbered item, bullet point, or row under "Rx" or "Treatment" represents a medication.
+   Even if the handwriting is messy, cursive, or abbreviated:
+   - Extract the best visible reading into `raw_name`.
+   - Set `extraction_confidence` to "low" or "medium".
+   - NEVER drop or omit a medication line from the `medications` array!
 
-raw_name:
-- The medicine name exactly as it is read from the prescription.
-- Include dosage-form prefixes such as "Tab", "Cap", "Inj" if written directly
-  before the name; the downstream normaliser will split them cleanly.
-- Do NOT correct spelling.
-- Do NOT convert a brand name to a generic name.
+2. STRENGTH VS INTAKE AMOUNT (CRITICAL):
+   - `dosage`: Put the manufactured chemical product strength here if specified (e.g. "400 mg", "100 mg", "20/30 mg", "625 mg").
+     If the prescription has a trailing number after the brand (e.g. "Doxolin 400" -> 400 mg; "Indocap 100" -> 100 mg; "Pan 40" -> 40 mg), record that strength in `dosage`.
+   - `instructions`: Put the intake quantity/directions here (e.g. "take 1/2 tablet", "10 mL", "2 puffs", "after meals").
+     DO NOT put intake instructions like "1/2" or "10 mL" into the `dosage` field!
 
-dosage:
-- Extract the dose/strength exactly as written.
-- Examples: "100 mg", "400 mcg", "50/500 mg", "1/2 tablet".
-- Return null if not visible.
+3. COMMON INDIAN FIXED-DOSE COMBINATION (FDC) BRAND PATTERNS:
+   Indian doctors frequently prescribe combination brands with standard suffixes:
+   - Suffix "-D" or "-DSR": Drug + Domperidone (e.g. Radyle-D, Razo-D, Pan-D, Rablet-D).
+   - Suffix "-LC" or "-L": Drug + Levocetirizine (e.g. Montek-LC, Montair-LC, Montas-L).
+   - Suffix "-AM": Drug + Amlodipine (e.g. Telma-AM, Amlong-A).
+   - Suffix "-H": Drug + Hydrochlorothiazide (e.g. Telma-H).
+   - Suffix "-SP": NSAID + Paracetamol + Serratiopeptidase (e.g. Zerodol-SP, Hifenac-SP).
+   - Suffix "-CV": Drug + Clavulanic acid (e.g. Moxikind-CV, Augmentin).
 
-frequency:
-- Convert an explicitly written frequency into simple English.
-- Examples:
-  "1-0-1" -> "twice a day"
-  "0-0-1" -> "once a day at night"
-  "1-0-0" -> "once a day in the morning"
-- If the frequency cannot be reliably determined, return null.
-- Do not invent a frequency.
+4. MEDICAL FREQUENCY DECODING:
+   - "OD" / "1-0-0" / "0-1-0" -> "once daily" (specify morning/afternoon/night if indicated)
+   - "BD" / "1-0-1" / "1-1-0" / "0-1-1" -> "twice daily"
+   - "TDS" / "1-1-1" -> "three times daily"
+   - "QID" / "1-1-1-1" -> "four times daily"
+   - "HS" / "0-0-1" -> "once daily at bedtime / night"
+   - "SOS" / "PRN" -> "as needed / when required"
+   - "STAT" -> "immediately (single dose)"
+   Also record the literal shorthand in `frequency_raw` (e.g. "1-0-1", "BD", "1/2 BD M").
 
-duration:
-- Only extract an explicitly written duration.
-- Examples: "7 days", "2 months".
-- NEVER infer duration from quantity, dosage, or frequency.
-- If not explicitly written, return null.
+5. FOOD & TIMING:
+   - "AC" / "BBF" -> "before food / empty stomach"
+   - "PC" / "AF" -> "after food / after meals"
 
-instructions:
-- Extract additional instructions such as:
-  "before breakfast", "after food", "with food", "before sleep", "use with inhaler".
-- Do not invent instructions.
+6. DURATION:
+   - "x 5d" / "5 days" / "5/7" -> "5 days"
+   - "x 1w" / "1 week" / "1/52" -> "7 days"
+   - "x 1m" / "1 month" / "1/12" -> "30 days"
 
-form:
-- Extract the dosage form only if it is explicitly visible or clearly indicated.
-- Examples: tablet, capsule, injection, syrup, inhaler.
-- Otherwise null.
-
-route:
-- Extract the route only when explicitly indicated.
-- Examples: oral, inhalation, topical, intravenous.
-- Otherwise null.
-
-extraction_confidence:
-- "high": clearly readable.
-- "medium": partially unclear but reasonably readable.
-- "low": handwriting/OCR is substantially uncertain.
-
-IMPORTANT:
-The purpose of this output is to pass the extracted medication information to a
-separate medicine-matching system.
-
-Therefore, NEVER decide which RxNorm medicine the prescription refers to.
-Do not output an RxCUI.
-Do not invent a generic medicine name.
-Do not replace an uncertain name with a medically plausible name.
-
-Extract first. Matching will happen separately.
+7. PRESERVE ORIGINAL BRAND SPELLING:
+   Do NOT convert brand names to generic names. Preserve the brand name (e.g. "Doxolin 400", "Budecort", "Radyle D", "Augmentin") as written on the prescription.
 """
 
 # ---------------------------------------------------------------------------
@@ -508,7 +526,13 @@ def extract_prescription_data(
 
     api_key = _get_api_key()
     client = genai.Client(api_key=api_key)
-    model_name = model or DEFAULT_MODEL
+
+    candidate_models = []
+    if model:
+        candidate_models.append(model)
+    for m in FALLBACK_MODELS:
+        if m not in candidate_models:
+            candidate_models.append(m)
 
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
@@ -520,27 +544,38 @@ def extract_prescription_data(
         response_schema=_GEMINI_RESPONSE_SCHEMA,
     )
 
-    # ── Retry loop (transient errors only) ──────────────────────────────────
-    for attempt in range(1, _MAX_RETRIES + 2):
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[image_part, EXTRACTION_PROMPT],
-                config=types.GenerateContentConfig(**gen_config_kwargs),
-            )
-            break  # success
-        except Exception as exc:
-            last_exc = exc
-            if _is_transient_error(exc) and attempt <= _MAX_RETRIES:
-                wait = _RETRY_DELAY_S * attempt
-                logger.warning(
-                    "Gemini API transient error (attempt %d/%d): %s — retrying in %.1fs",
-                    attempt, _MAX_RETRIES + 1, exc, wait,
+    response = None
+    last_exc = None
+
+    # ── Try candidate models in priority order ─────────────────────────────
+    for model_name in candidate_models:
+        for attempt in range(1, _MAX_RETRIES + 2):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[image_part, EXTRACTION_PROMPT],
+                    config=types.GenerateContentConfig(**gen_config_kwargs),
                 )
-                time.sleep(wait)
-                continue
-            logger.error("Gemini API call failed: %s", exc)
-            return _error_response(f"Gemini API call failed: {exc}")
+                break  # success with this model
+            except Exception as exc:
+                last_exc = exc
+                if _is_transient_error(exc) and attempt <= _MAX_RETRIES:
+                    wait = _RETRY_DELAY_S * attempt
+                    logger.warning(
+                        "Gemini API transient error on model %s (attempt %d/%d): %s — retrying in %.1fs",
+                        model_name, attempt, _MAX_RETRIES + 1, exc, wait,
+                    )
+                    time.sleep(wait)
+                    continue
+                logger.warning("Gemini model %s call failed: %s", model_name, exc)
+                break  # try next model in fallback list
+
+        if response is not None:
+            break
+
+    if response is None:
+        logger.error("All Gemini candidate models failed. Last error: %s", last_exc)
+        return _error_response(f"Gemini extraction failed across models: {last_exc}")
 
     raw_response_text: str = getattr(response, "text", "") or ""
 

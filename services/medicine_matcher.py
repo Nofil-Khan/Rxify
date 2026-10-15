@@ -86,12 +86,161 @@ _STRENGTH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# =============================================================================
+# International (BAN/IP/EP) -> USAN / RxNorm synonym & brand bridge
+# =============================================================================
+_GENERIC_SYNONYMS: Dict[str, str] = {
+    # Essential international salt synonyms
+    "paracetamol": "acetaminophen",
+    "pcm": "acetaminophen",
+    "salbutamol": "albuterol",
+    "frusemide": "furosemide",
+    "amoxycillin": "amoxicillin",
+    "lignocaine": "lidocaine",
+    "thyroxine": "levothyroxine",
+    "co-amoxiclav": "amoxicillin",
+    "chlorpheniramine": "chlorpheniramine maleate",
+    "rifampicin": "rifampin",
+    # Top high-frequency Indian & international brand trade names
+    "dolo": "acetaminophen",
+    "crocin": "acetaminophen",
+    "calpol": "acetaminophen",
+    "panadol": "acetaminophen",
+    "asthalin": "albuterol",
+    "ventolin": "albuterol",
+    "lasix": "furosemide",
+    "amoxil": "amoxicillin",
+    "mox": "amoxicillin",
+    "novamox": "amoxicillin",
+    "augmentin": "amoxicillin / clavulanate",
+    "clavam": "amoxicillin / clavulanate",
+    "moxikind": "amoxicillin",
+    "moxikind-cv": "amoxicillin / clavulanate",
+    "pan": "pantoprazole",
+    "pan 40": "pantoprazole",
+    "pantocid": "pantoprazole",
+    "pantodac": "pantoprazole",
+    "pantop": "pantoprazole",
+    "omez": "omeprazole",
+    "omee": "omeprazole",
+    "glycomet": "metformin",
+    "cetapin": "metformin",
+    "glucophage": "metformin",
+    "telma": "telmisartan",
+    "telmikind": "telmisartan",
+    "telpres": "telmisartan",
+    "amlong": "amlodipine",
+    "norvasc": "amlodipine",
+    "atorva": "atorvastatin",
+    "lipitor": "atorvastatin",
+    "storvas": "atorvastatin",
+    "rosuvas": "rosuvastatin",
+    "rozavel": "rosuvastatin",
+    "cetzine": "cetirizine",
+    "alerid": "cetirizine",
+    "zyrtec": "cetirizine",
+    "ecosprin": "aspirin",
+    "disprin": "aspirin",
+    "combiflam": "ibuprofen",
+    "brufen": "ibuprofen",
+    "voveran": "diclofenac",
+    "ciplox": "ciprofloxacin",
+    "cifran": "ciprofloxacin",
+    "rantac": "ranitidine",
+    "zinetac": "ranitidine",
+    "allegra": "fexofenadine",
+    "montair": "montelukast",
+    "montair-lc": "montelukast / levocetirizine",
+    "montek-lc": "montelukast / levocetirizine",
+    "stonclos": "montelukast / levocetirizine",
+    "azithral": "azithromycin",
+    "azee": "azithromycin",
+    "zithromax": "azithromycin",
+    "shelcal": "calcium carbonate",
+    "janumet": "sitagliptin / metformin",
+    # Respiratory & Chest Specialty
+    "doxolin": "doxofylline",
+    "doxoril": "doxofylline",
+    "doxiflo": "doxofylline",
+    "buditone": "budesonide",
+    "buditone n": "budesonide",
+    "budecort": "budesonide",
+    "budetrol": "budesonide",
+    "foracort": "budesonide",
+    "indoclo": "indomethacin",
+    "indocap": "indomethacin",
+    "indocid": "indomethacin",
+    "radyle": "rabeprazole / domperidone",
+    "radyle d": "rabeprazole / domperidone",
+    "cap radyle d": "rabeprazole / domperidone",
+    "razo": "rabeprazole",
+    "razo-d": "rabeprazole / domperidone",
+    "razo d": "rabeprazole / domperidone",
+    "rablet": "rabeprazole",
+    "rablet-d": "rabeprazole / domperidone",
+    "rablet d": "rabeprazole / domperidone",
+    "rabicip": "rabeprazole",
+    "rabicip-d": "rabeprazole / domperidone",
+    "cyra": "rabeprazole",
+    "happi": "rabeprazole",
+    "montek": "montelukast",
+    "montas": "montelukast",
+    "telekast": "montelukast",
+    "zerodol": "aceclofenac",
+    "hifenac": "aceclofenac",
+    "moxikind": "amoxicillin",
+    "pulmoclear": "acebrophylline",
+    "polluton": "acebrophylline",
+    "macphylline": "acebrophylline",
+    "deriphyllin": "theophylline",
+    "levolin": "levalbuterol",
+    "duolin": "ipratropium",
+}
+
+
+def query_nlm_rxnorm_approximate(term: str) -> List[Dict[str, Any]]:
+    """Query the National Library of Medicine (NLM) RxNorm approximateTerm API.
+
+    Free public REST service by NIH / NLM (no API key required).
+    Uses specialized clinical phonetic scoring to resolve typos and obscure drugs.
+    """
+    import json as _json
+    import urllib.parse as _up
+    import urllib.request as _ur
+
+    clean_term = term.strip()
+    if not clean_term or len(clean_term) < 3:
+        return []
+
+    url = f"https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term={_up.quote(clean_term)}&maxEntries=3"
+    req = _ur.Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "Rxify-HealthTech/1.0"},
+    )
+
+    try:
+        with _ur.urlopen(req, timeout=3.0) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+            candidates = data.get("approximateGroup", {}).get("candidate", [])
+            results = []
+            for cand in candidates:
+                rxcui = cand.get("rxcui")
+                score = float(cand.get("score", 0.0))
+                name = cand.get("name")
+                if rxcui and score >= 0.50:
+                    results.append({"rxcui": str(rxcui), "score": score, "name": name})
+            return results
+    except Exception as exc:
+        logger.debug("NLM RxNorm approximateTerm query skipped for %r: %s", term, exc)
+        return []
+
 
 # =============================================================================
 # Public types
 # =============================================================================
 
 MatchStatus = str  # "MATCHED" | "AMBIGUOUS" | "UNRESOLVED" | "NOT_A_MEDICINE"
+
 
 
 def _make_matched(
@@ -178,7 +327,24 @@ def _extract_strength(text: str) -> Optional[str]:
     m = _STRENGTH_RE.search(text)
     if m:
         return m.group(0).strip()
+    # Trailing bare numeric strength (e.g. "Doxolin 400" -> 400 mg, "Indoclo 100" -> 100 mg, "Pan 40" -> 40 mg)
+    bare = re.search(r"\b(\d{1,4})\s*$", text.strip())
+    if bare:
+        return f"{bare.group(1)} mg"
     return None
+
+
+def _is_intake_quantity(val: Optional[str]) -> bool:
+    """Check if a string is an intake dose quantity (e.g. '1/2', '1 tab', '10 ml', '1 puff')
+    rather than a manufactured drug formulation strength.
+    """
+    if not val:
+        return True
+    v = val.strip().lower()
+    if re.match(r"^(\d+/\d+|\d+(\.\d+)?)\s*(tab|tabs|tablet|tablets|cap|caps|capsule|puff|puffs|drop|drops|ml|tsp|spoon)?$", v):
+        if not re.search(r"\b(mg|mcg|ug|g|iu|meq|%)\b", v):
+            return True
+    return False
 
 
 def _clean_name(raw: str) -> str:
@@ -190,6 +356,7 @@ def _clean_name(raw: str) -> str:
          "Glimepiride 2mg"      -> "glimepiride"
          "Budetrol M cap"       -> "budetrol m"
          "Janumet 50-500"       -> "janumet"
+         "Doxolin 400"          -> "doxolin"
     """
     name = raw.strip()
     # Normalise dash-separated combo strengths before stripping (e.g. 50-500 -> 50/500)
@@ -208,6 +375,9 @@ def _clean_name(raw: str) -> str:
     )
     # 2. Single strength tokens (e.g. 500mg, 20 mg)
     name = _STRENGTH_RE.sub("", name)
+
+    # 2b. Standalone trailing numbers (e.g. "Doxolin 400" -> "doxolin", "Indoclo 100" -> "indoclo", "Pan 40" -> "pan")
+    name = re.sub(r"\b\d{1,4}\s*$", "", name)
 
     # 3. Release modifier tokens (e.g. SR, ER, XR, 24 HR, extended release)
     name = re.sub(
@@ -352,10 +522,17 @@ def _strengths_match(input_strength: Optional[str], db_strength: Optional[str]) 
             sum_t2 = sum(tok[1] for tok in t2 if tok[0] in ('mass', 'num'))
             if abs(t1[0][1] - sum_t2) < 0.01:
                 return True
+            # Match single indicator against first active component (e.g. Glycomet-GP 1 -> 1 MG in 1 MG / 500 MG)
+            first_t2 = t2[0]
+            if first_t2[0] in ('mass', 'num') and abs(t1[0][1] - first_t2[1]) < 0.01:
+                return True
     if len(t2) == 1 and len(t1) > 1:
         if t2[0][0] in ('mass', 'num'):
             sum_t1 = sum(tok[1] for tok in t1 if tok[0] in ('mass', 'num'))
             if abs(t2[0][1] - sum_t1) < 0.01:
+                return True
+            first_t1 = t1[0]
+            if first_t1[0] in ('mass', 'num') and abs(t2[0][1] - first_t1[1]) < 0.01:
                 return True
 
     return False
@@ -528,6 +705,82 @@ def _lookup_trgm(
     return cur.fetchall()
 
 
+# -----------------------------------------------------------------------------
+# Fixed-Dose Combination (FDC) Decomposer & Phonetic Lookup
+# -----------------------------------------------------------------------------
+
+_FDC_PATTERNS = [
+    (re.compile(r"[-_\s]?(dsr|d)$", re.IGNORECASE), "domperidone"),
+    (re.compile(r"[-_\s]?(lc|l)$", re.IGNORECASE), "levocetirizine"),
+    (re.compile(r"[-_\s]?(am)$", re.IGNORECASE), "amlodipine"),
+    (re.compile(r"[-_\s]?(h|ct)$", re.IGNORECASE), "hydrochlorothiazide"),
+    (re.compile(r"[-_\s]?(sp)$", re.IGNORECASE), "paracetamol / serratiopeptidase"),
+    (re.compile(r"[-_\s]?(cv)$", re.IGNORECASE), "clavulanate"),
+]
+
+
+def _decompose_fdc_combo(name: str) -> Optional[str]:
+    """Decompose common Indian Fixed-Dose Combination brand suffixes into canonical generic combinations.
+
+    e.g. "pan-d" -> "pantoprazole / domperidone"
+         "montek-lc" -> "montelukast / levocetirizine"
+         "telma-am" -> "telmisartan / amlodipine"
+         "zerodol-sp" -> "aceclofenac / paracetamol / serratiopeptidase"
+    """
+    n = name.strip().lower()
+    for pat, partner in _FDC_PATTERNS:
+        m = pat.search(n)
+        if m:
+            base_brand = n[:m.start()].strip(" -_")
+            if base_brand:
+                base_generic = _GENERIC_SYNONYMS.get(base_brand, base_brand)
+                if base_generic:
+                    if partner in base_generic:
+                        return base_generic
+                    return f"{base_generic} / {partner}"
+    return None
+
+
+def _lookup_phonetic(
+    cur: psycopg2.extras.RealDictCursor,
+    name: str,
+) -> List[dict]:
+    """Double Metaphone phonetic lookup across generic_name, brand_name, and medicine_alias.
+
+    Tolerates handwriting/OCR character misreads that sound identical (e.g. Radyle vs Rablet).
+    """
+    try:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (m.medicine_id)
+                m.medicine_id,
+                m.generic_name,
+                m.brand_name,
+                m.strength,
+                m.form::TEXT AS form,
+                m.rxcui,
+                m.rxnorm_name,
+                GREATEST(
+                    similarity(LOWER(COALESCE(m.brand_name, '')), LOWER(%s)),
+                    similarity(LOWER(m.generic_name), LOWER(%s)),
+                    0.65
+                ) AS sim_score
+            FROM medicine m
+            LEFT JOIN medicine_alias a ON a.medicine_id = m.medicine_id
+            WHERE dmetaphone(COALESCE(m.brand_name, m.generic_name)) = dmetaphone(%s)
+               OR dmetaphone(COALESCE(a.alias_name, '')) = dmetaphone(%s)
+            ORDER BY m.medicine_id, sim_score DESC
+            LIMIT 10
+            """,
+            (name, name, name, name),
+        )
+        rows = cur.fetchall()
+        return sorted(rows, key=lambda r: float(r.get("sim_score", 0)), reverse=True)
+    except Exception as exc:
+        logger.debug("Phonetic lookup skipped for %r: %s", name, exc)
+        return []
+
+
 # =============================================================================
 # Core resolution logic
 # =============================================================================
@@ -572,8 +825,15 @@ def resolve_medicine(
     # ── Pre-process the input ──────────────────────────────────────────────────
     clean = _clean_name(raw_name)
 
-    # Strength: prefer extracted_dosage; fall back to detecting it in raw_name
-    strength_raw = extracted_dosage or _extract_strength(raw_name)
+    # Strength: prefer explicit manufactured strength embedded in raw_name first (e.g. "Doxolin 400" -> 400 mg),
+    # then fallback to extracted_dosage only if it contains true chemical units (mg, mcg, etc.)
+    name_strength = _extract_strength(raw_name)
+    if name_strength:
+        strength_raw = name_strength
+    elif extracted_dosage and not _is_intake_quantity(extracted_dosage):
+        strength_raw = extracted_dosage
+    else:
+        strength_raw = None
     strength_norm = _normalise_strength(strength_raw)
 
     if not clean:
@@ -642,7 +902,10 @@ def _resolve_candidate_rows(
             candidates = matching_strength
             method_prefix = f"{method_prefix}_strength"
         else:
-            return _make_unresolved(f"No candidate matching strength {strength_raw!r} found for {clean!r}")
+            return _make_ambiguous([
+                _row_to_candidate(c, base_confidence * 0.85, f"{method_prefix}_diff_strength")
+                for c in candidates[:_MAX_AMBIGUOUS_CANDIDATES]
+            ])
 
     # 2. Form Filtering (Requirement 6)
     if extracted_form:
@@ -802,6 +1065,68 @@ def _resolve_with_cursor(
                 strength=row.get("strength"),
             )
 
+    # ── Step 1.5: Generic Synonym & Brand Bridge ──────────────────────────────
+    mapped_target = _GENERIC_SYNONYMS.get(clean) or _GENERIC_SYNONYMS.get(_strip_form_prefix(raw_name).lower())
+    if mapped_target and mapped_target != clean:
+        syn_rows = _lookup_exact(cur, mapped_target)
+        if syn_rows:
+            cand_dicts = [dict(r) for r in syn_rows]
+            res = _resolve_candidate_rows(
+                cand_dicts,
+                raw_name,
+                mapped_target,
+                strength_raw,
+                extracted_form,
+                base_confidence=0.95 if strength_raw else 0.85,
+                method_prefix="synonym_bridge",
+            )
+            if res.get("status") in ("MATCHED", "AMBIGUOUS"):
+                if res.get("status") == "MATCHED":
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO medicine_alias (alias_name, medicine_id, alias_type, notes)
+                            VALUES (LOWER(%s), %s, 'synonym_auto', 'Cached from generic synonym bridge')
+                            ON CONFLICT (alias_name) DO NOTHING
+                            """,
+                            (clean, res["medicine_id"]),
+                        )
+                    except Exception:
+                        pass
+                return res
+
+    # ── Step 1.6: Fixed-Dose Combination (FDC) Decomposer ───────────────────
+    fdc_target = _decompose_fdc_combo(clean)
+    if fdc_target and fdc_target != clean:
+        fdc_rows = _lookup_exact(cur, fdc_target)
+        if not fdc_rows:
+            fdc_rows = _lookup_trgm(cur, fdc_target)
+        if fdc_rows:
+            cand_dicts = [dict(r) for r in fdc_rows]
+            res = _resolve_candidate_rows(
+                cand_dicts,
+                raw_name,
+                fdc_target,
+                strength_raw,
+                extracted_form,
+                base_confidence=0.92 if strength_raw else 0.82,
+                method_prefix="fdc_decomposer",
+            )
+            if res.get("status") in ("MATCHED", "AMBIGUOUS"):
+                if res.get("status") == "MATCHED":
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO medicine_alias (alias_name, medicine_id, alias_type, notes)
+                            VALUES (LOWER(%s), %s, 'fdc_auto', 'Cached from FDC combination decomposer')
+                            ON CONFLICT (alias_name) DO NOTHING
+                            """,
+                            (clean, res["medicine_id"]),
+                        )
+                    except Exception:
+                        pass
+                return res
+
     # ── Step 2: Exact name match on generic_name or brand_name ────────────────
     rows = _lookup_exact(cur, clean)
     if rows:
@@ -822,68 +1147,149 @@ def _resolve_with_cursor(
 
     # ── Step 3: Fuzzy trigram search ──────────────────────────────────────────
     trgm_rows = _lookup_trgm(cur, clean)
-    if not trgm_rows:
-        return _make_unresolved(f"No similar medicine found for {clean!r}")
+    if trgm_rows:
+        candidates: List[Dict[str, Any]] = []
+        for r in trgm_rows:
+            row = dict(r)
+            sim = float(row.pop("sim_score", 0.0))
+            candidates.append({**row, "_sim": sim})
 
-    candidates: List[Dict[str, Any]] = []
-    for r in trgm_rows:
-        row = dict(r)
-        sim = float(row.pop("sim_score", 0.0))
-        candidates.append({**row, "_sim": sim})
+        top = candidates[0]
+        top_sim = top["_sim"]
 
-    top = candidates[0]
-    top_sim = top["_sim"]
+        if top_sim >= _TRGM_MIN_SIMILARITY:
+            # If strength was provided, boost/filter candidates matching that strength
+            if strength_raw:
+                matching_strength_cands = [c for c in candidates if _strengths_match(strength_raw, c.get("strength"))]
+                if matching_strength_cands:
+                    best_sim = matching_strength_cands[0]["_sim"]
+                    if best_sim >= _TRGM_MEDIUM_CONFIDENCE:
+                        res = _resolve_candidate_rows(
+                            matching_strength_cands,
+                            raw_name,
+                            clean,
+                            strength_raw,
+                            extracted_form,
+                            base_confidence=best_sim,
+                            method_prefix="trgm_strength_match",
+                        )
+                        if res.get("status") in ("MATCHED", "AMBIGUOUS"):
+                            return res
+                else:
+                    # Strength mismatch: rather than hard failing to UNRESOLVED,
+                    # return candidates as ambiguous suggestions for patient/doctor review
+                    if candidates and top_sim >= _TRGM_MEDIUM_CONFIDENCE:
+                        return _make_ambiguous([
+                            _row_to_candidate(c, c["_sim"], "trgm_strength_alternative")
+                            for c in candidates[:_MAX_AMBIGUOUS_CANDIDATES]
+                        ])
 
-    if top_sim < _TRGM_MIN_SIMILARITY:
-        return _make_unresolved(f"Best similarity {top_sim:.2f} is below threshold for {clean!r}")
+            # Single result or clear winner by gap
+            if len(candidates) == 1 or (
+                len(candidates) > 1
+                and (top["_sim"] - candidates[1]["_sim"]) >= _TRGM_AMBIGUITY_GAP
+            ):
+                if top_sim >= _TRGM_MEDIUM_CONFIDENCE:
+                    method = "trgm_high" if top_sim >= _TRGM_HIGH_CONFIDENCE else "trgm_medium"
+                    return _resolve_candidate_rows(
+                        [top],
+                        raw_name,
+                        clean,
+                        strength_raw,
+                        extracted_form,
+                        base_confidence=top_sim,
+                        method_prefix=method,
+                    )
 
-    # If strength was provided, boost/filter candidates matching that strength
-    if strength_raw:
-        matching_strength_cands = [c for c in candidates if _strengths_match(strength_raw, c.get("strength"))]
-        if matching_strength_cands:
-            best_sim = matching_strength_cands[0]["_sim"]
-            if best_sim >= _TRGM_MEDIUM_CONFIDENCE:
-                res = _resolve_candidate_rows(
-                    matching_strength_cands,
+            # Multiple close candidates
+            if top_sim >= _TRGM_MEDIUM_CONFIDENCE:
+                return _resolve_candidate_rows(
+                    candidates[:_MAX_AMBIGUOUS_CANDIDATES],
                     raw_name,
                     clean,
                     strength_raw,
                     extracted_form,
-                    base_confidence=best_sim,
-                    method_prefix="trgm_strength_match",
+                    base_confidence=top_sim,
+                    method_prefix="trgm",
                 )
-                if res.get("status") in ("MATCHED", "AMBIGUOUS"):
-                    return res
-        else:
-            return _make_unresolved(f"No similar medicine matching strength {strength_raw!r} found for {clean!r}")
 
-    # Single result or clear winner by gap
-    if len(candidates) == 1 or (
-        len(candidates) > 1
-        and (top["_sim"] - candidates[1]["_sim"]) >= _TRGM_AMBIGUITY_GAP
-    ):
-        if top_sim >= _TRGM_MEDIUM_CONFIDENCE:
-            method = "trgm_high" if top_sim >= _TRGM_HIGH_CONFIDENCE else "trgm_medium"
-            return _resolve_candidate_rows(
-                [top],
+    # ── Step 3.5: Double Metaphone Phonetic Search ──────────────────────────
+    phonetic_rows = _lookup_phonetic(cur, clean)
+    if phonetic_rows:
+        cand_dicts = [dict(r) for r in phonetic_rows]
+        top_phon = cand_dicts[0]
+        phon_sim = float(top_phon.get("sim_score", 0.70))
+        res = _resolve_candidate_rows(
+            cand_dicts,
+            raw_name,
+            clean,
+            strength_raw,
+            extracted_form,
+            base_confidence=phon_sim,
+            method_prefix="phonetic_metaphone",
+        )
+        if res.get("status") in ("MATCHED", "AMBIGUOUS"):
+            return res
+
+    # ── Step 4: NLM RxNorm Dynamic Online Fallback ───────────────────────────
+    nlm_cands = query_nlm_rxnorm_approximate(clean)
+    for nlm_item in nlm_cands:
+        rxcui = nlm_item["rxcui"]
+        nlm_name = (nlm_item.get("name") or "").strip().lower()
+
+        # 1. Direct RxCUI lookup
+        cur.execute(
+            """
+            SELECT medicine_id, generic_name, brand_name, strength, form::TEXT AS form, rxcui, rxnorm_name
+            FROM medicine
+            WHERE rxcui = %s
+            """,
+            (rxcui,),
+        )
+        rxcui_rows = cur.fetchall()
+
+        # 2. If not found by RxCUI, lookup by NLM concept ingredient/brand name
+        if not rxcui_rows and nlm_name:
+            cur.execute(
+                """
+                SELECT medicine_id, generic_name, brand_name, strength, form::TEXT AS form, rxcui, rxnorm_name
+                FROM medicine
+                WHERE LOWER(generic_name) = %s OR LOWER(brand_name) = %s
+                   OR generic_name ILIKE %s
+                LIMIT 20
+                """,
+                (nlm_name, nlm_name, f"%{nlm_name}%"),
+            )
+            rxcui_rows = cur.fetchall()
+
+        if rxcui_rows:
+            cand_dicts = [dict(r) for r in rxcui_rows]
+            res = _resolve_candidate_rows(
+                cand_dicts,
                 raw_name,
                 clean,
                 strength_raw,
                 extracted_form,
-                base_confidence=top_sim,
-                method_prefix=method,
+                base_confidence=nlm_item["score"],
+                method_prefix="nlm_rxnorm_api",
             )
+            if res.get("status") in ("MATCHED", "AMBIGUOUS"):
+                if res.get("status") == "MATCHED":
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO medicine_alias (alias_name, medicine_id, alias_type, notes)
+                            VALUES (LOWER(%s), %s, 'nlm_auto', 'Cached from NLM RxNorm approximateTerm API')
+                            ON CONFLICT (alias_name) DO NOTHING
+                            """,
+                            (clean, res["medicine_id"]),
+                        )
+                    except Exception:
+                        pass
+                return res
 
-    # Multiple close candidates
-    return _resolve_candidate_rows(
-        candidates[:_MAX_AMBIGUOUS_CANDIDATES],
-        raw_name,
-        clean,
-        strength_raw,
-        extracted_form,
-        base_confidence=top_sim,
-        method_prefix="trgm",
-    )
+    return _make_unresolved(f"No similar medicine found for {clean!r}")
+
 
 
 # =============================================================================
