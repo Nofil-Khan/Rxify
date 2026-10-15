@@ -12,17 +12,19 @@ import MyDoctor from './tabs/MyDoctor';
 import PatientMessagesTab from './tabs/MessagesTab';
 import UploadTab from './tabs/UploadTab';
 import DispensaryTab from './tabs/DispensaryTab';
-import { Package } from 'lucide-react';
+import MedicationTimelineTab from './tabs/MedicationTimelineTab';
+import { Package, GitBranch } from 'lucide-react';
 
-export type DashTab = 'overview' | 'prescriptions' | 'dispensary' | 'doctor' | 'messages' | 'upload';
+export type DashTab = 'overview' | 'prescriptions' | 'timeline' | 'dispensary' | 'doctor' | 'messages' | 'upload';
 
 const NAV_ITEMS: { id: DashTab; label: string; icon: React.ReactNode; desc: string }[] = [
-  { id: 'overview',       label: 'Overview',         icon: <TrendingUp size={20} />,  desc: 'Your health snapshot'   },
-  { id: 'prescriptions',  label: 'My Prescriptions',  icon: <FileText size={20} />,    desc: 'All your records'       },
-  { id: 'dispensary',     label: 'Dispensary Status', icon: <Package size={20} />,     desc: 'Live medicine ETAs'     },
-  { id: 'doctor',         label: 'My Doctor',         icon: <Stethoscope size={20} />, desc: 'Doctor connection'      },
-  { id: 'messages',       label: 'Messages',         icon: <MessageSquare size={20} />,desc: 'Doctor consultation chat' },
-  { id: 'upload',         label: 'Upload',            icon: <Upload size={20} />,      desc: 'Add a new prescription' },
+  { id: 'overview',       label: 'Overview',          icon: <TrendingUp size={20} />,   desc: 'Your health snapshot'       },
+  { id: 'prescriptions',  label: 'My Prescriptions',   icon: <FileText size={20} />,     desc: 'All your records'           },
+  { id: 'timeline',       label: 'Medicine Timeline',  icon: <GitBranch size={20} />,    desc: 'Active regimen flowchart'   },
+  { id: 'dispensary',     label: 'Dispensary Status',  icon: <Package size={20} />,      desc: 'Live medicine ETAs'         },
+  { id: 'doctor',         label: 'My Doctor',          icon: <Stethoscope size={20} />,  desc: 'Doctor connection'          },
+  { id: 'messages',       label: 'Messages',          icon: <MessageSquare size={20} />, desc: 'Doctor consultation chat'   },
+  { id: 'upload',         label: 'Upload',             icon: <Upload size={20} />,       desc: 'Add a new prescription'     },
 ];
 
 import ShareIdModal from '../../components/common/ShareIdModal';
@@ -244,8 +246,9 @@ export default function PatientDashboard() {
 
         {/* Page content */}
         <div className="pd-content" role="region" aria-live="polite">
-          {tab === 'overview'      && <Overview      onUploadClick={() => switchTab('upload')} onViewAllClick={() => switchTab('prescriptions')} />}
+          {tab === 'overview'      && <Overview      onUploadClick={() => switchTab('upload')} onViewAllClick={() => switchTab('prescriptions')} onTimelineClick={() => switchTab('timeline')} />}
           {tab === 'prescriptions' && <MyPrescriptions />}
+          {tab === 'timeline'      && <MedicationTimelineTab />}
           {tab === 'dispensary'    && <DispensaryTab />}
           {tab === 'doctor'        && <MyDoctor />}
           {tab === 'messages'      && <PatientMessagesTab />}

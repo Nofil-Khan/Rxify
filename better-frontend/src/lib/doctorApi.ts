@@ -2,7 +2,7 @@
 
 import { authHeaders } from './api';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 /** Safe helper to get 2-letter uppercase initials without crashing on null/undefined */
 export function getInitials(name?: string | null): string {

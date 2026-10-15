@@ -9,9 +9,12 @@ import {
   type PatientStats, type Prescription, type DoctorInfo
 } from '../../../lib/patientApi';
 
+import { GitBranch } from 'lucide-react';
+
 interface Props {
   onUploadClick: () => void;
   onViewAllClick: () => void;
+  onTimelineClick?: () => void;
 }
 
 function getGreeting() {
@@ -27,7 +30,7 @@ function formatDate(d: string | null) {
   catch { return d; }
 }
 
-export default function Overview({ onUploadClick, onViewAllClick }: Props) {
+export default function Overview({ onUploadClick, onViewAllClick, onTimelineClick }: Props) {
   const { username } = useAuthStore();
   const [stats, setStats]           = useState<PatientStats | null>(null);
   const [recent, setRecent]         = useState<Prescription[]>([]);
@@ -214,6 +217,26 @@ export default function Overview({ onUploadClick, onViewAllClick }: Props) {
           )}
         </section>
       </div>
+
+      {/* ── Medication Timeline strip ───────────────────────────────────── */}
+      {onTimelineClick && (
+        <button
+          id="quick-timeline-btn"
+          className="pd-upload-strip"
+          onClick={onTimelineClick}
+          aria-label="View Medication Timeline Flowchart"
+          style={{ marginBottom: '1rem', borderLeft: '4px solid var(--pd-teal)' }}
+        >
+          <div className="pd-upload-strip-icon" aria-hidden="true" style={{ background: 'var(--pd-teal-bg)', color: 'var(--pd-teal)' }}>
+            <GitBranch size={20} />
+          </div>
+          <div className="pd-upload-strip-text">
+            <span className="pd-upload-strip-title">Active Medication Timeline & Flowchart</span>
+            <span className="pd-upload-strip-sub">View continuous medication journeys, active regimen, and discontinuation tracking</span>
+          </div>
+          <ChevronRight size={20} className="pd-upload-strip-arrow" aria-hidden="true" />
+        </button>
+      )}
 
       {/* ── Quick Upload strip ──────────────────────────────────────────── */}
       <button

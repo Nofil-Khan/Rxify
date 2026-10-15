@@ -2,7 +2,7 @@
 
 import { authHeaders, ApiError } from './api';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -49,14 +49,61 @@ export interface Prescription {
   notes: string | null;
 }
 
+export type MatchStatus = 'MATCHED' | 'AMBIGUOUS' | 'UNRESOLVED' | 'NOT_A_MEDICINE' | null;
+
 export interface Medication {
   id: number;
+  /** Gemini-extracted raw text — always present */
+  raw_name: string;
+  /** Matcher verdict. NULL means legacy row (treat like UNRESOLVED, not MATCHED). */
+  match_status: MatchStatus;
+  /** True when the patient themselves confirmed / selected the catalog match. */
+  patient_resolved: boolean;
+  /** Catalog medicine_id — only set when match_status === 'MATCHED' */
+  medicine_id: number | null;
+  /** Catalog display name: brand_name ?? generic_name ?? raw_name */
   name: string | null;
+  generic_name: string | null;
+  brand_name: string | null;
+  strength: string | null;
+  form: string | null;
+  category: string | null;
+  /** Doctor's instructions from the prescription — always preserved */
   dosage: string | null;
   frequency: string | null;
   duration: string | null;
   instructions: string | null;
   date: string | null;
+}
+
+export interface MedicineCandidate {
+  medicine_id: number;
+  generic_name: string | null;
+  brand_name: string | null;
+  strength: string | null;
+  form: string | null;
+  category: string | null;
+  match_confidence: number;
+  match_method: string;
+}
+
+export interface CandidatesResult {
+  pm_id: number;
+  raw_name: string;
+  match_status: MatchStatus;
+  candidates: MedicineCandidate[];
+}
+
+export interface ResolvedMedicine {
+  pm_id: number;
+  prescription_id: number;
+  medicine_id: number;
+  generic_name: string | null;
+  brand_name: string | null;
+  strength: string | null;
+  form: string | null;
+  category: string | null;
+  patient_resolved: boolean;
 }
 
 export interface PrescriptionDetail extends Prescription {
@@ -223,5 +270,123 @@ export interface PatientDispensaryRequest {
 /** GET /api/patient/dispensary-requests */
 export function fetchMyDispensaryRequests(): Promise<{ requests: PatientDispensaryRequest[] }> {
   return req('/api/patient/dispensary-requests');
+}
+
+/** GET /api/patient/prescriptions/{rxId}/medicines/{pmId}/candidates */
+export function fetchMedicineCandidates(
+  prescriptionId: number,
+  pmId: number,
+): Promise<CandidatesResult> {
+  return req(`/api/patient/prescriptions/${prescriptionId}/medicines/${pmId}/candidates`);
+}
+
+/** PATCH /api/patient/prescriptions/{rxId}/medicines/{pmId}/resolve */
+export function resolvePrescriptionMedicine(
+  prescriptionId: number,
+  pmId: number,
+  medicineId: number,
+): Promise<{ message: string; medicine: ResolvedMedicine }> {
+  return req(`/api/patient/prescriptions/${prescriptionId}/medicines/${pmId}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify({ medicine_id: medicineId }),
+  });
+}
+
+/** GET /api/medicine/search?q=...&limit=... */
+export function searchMedicineCatalog(
+  q: string,
+  limit = 10,
+): Promise<MedicineCandidate[]> {
+  return req(`/api/medicine/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+}
+
+/* ─── Timeline & Current Medication Types & API ────────────────────────────── */
+
+export type MedicationTransition = 'STARTED' | 'CONTINUED' | 'DISCONTINUED' | 'COMPLETED';
+
+export interface TimelineMedicationItem {
+  current_medication_id: number;
+  prescription_medicine_id?: number;
+  medicine_id?: number | null;
+  name: string;
+  generic_name?: string | null;
+  brand_name?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  category?: string | null;
+  dosage?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  instructions?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  status: 'ACTIVE' | 'DISCONTINUED' | 'COMPLETED';
+  effective_status: 'ACTIVE' | 'DISCONTINUED' | 'COMPLETED';
+  notes?: string | null;
+  prescription_id?: number | null;
+  doctor_name?: string | null;
+  diagnosis?: string | null;
+  node_item_id: string;
+  transition: MedicationTransition;
+  connected_from?: string | null;
+}
+
+export interface TimelineMilestone {
+  index: number;
+  date: string;
+  display_date: string;
+  title: string;
+  prescription_ids: number[];
+  doctors: string[];
+  diagnoses: string[];
+  total_active_meds: number;
+  medications: TimelineMedicationItem[];
+}
+
+export interface FlowchartLink {
+  id: string;
+  source: string;
+  target: string;
+  source_milestone: number;
+  target_milestone: number;
+  medicine_name: string;
+  type: MedicationTransition;
+}
+
+export interface MedicationTimelineResponse {
+  patient_id: number | null;
+  milestones: TimelineMilestone[];
+  flowchart_links: FlowchartLink[];
+  active_now: TimelineMedicationItem[];
+  summary: {
+    total_prescriptions: number;
+    total_tracked_medications: number;
+    active_now_count: number;
+    discontinued_count: number;
+    completed_count: number;
+    timeline_nodes_count: number;
+  };
+}
+
+/** GET /api/patient/medication-timeline */
+export function fetchMedicationTimeline(): Promise<MedicationTimelineResponse> {
+  return req('/api/patient/medication-timeline');
+}
+
+/** PATCH /api/patient/current-medications/{current_medication_id}/status */
+export function updateMedicationStatus(
+  currentMedicationId: number,
+  status: 'ACTIVE' | 'DISCONTINUED' | 'COMPLETED',
+  endDate?: string,
+  notes?: string,
+): Promise<{ success: boolean; message: string; medication: any }> {
+  return req(`/api/patient/current-medications/${currentMedicationId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status,
+      end_date: endDate,
+      notes,
+    }),
+  });
 }
 

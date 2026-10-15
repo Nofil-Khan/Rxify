@@ -1,6 +1,6 @@
 /* ─── Rxify Hospital API Client ─────────────────────────────────────────────── */
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE = import.meta.env.VITE_API_URL ?? '';
 
 function hHeaders(): Record<string, string> {
   const t = localStorage.getItem('rxify_hospital_token');
