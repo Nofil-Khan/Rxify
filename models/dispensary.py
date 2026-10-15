@@ -5,13 +5,13 @@ request queue handling, and dispensing operations.
 """
 
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ── Auth & Profile ─────────────────────────────────────────────────────────────
 
 class DispensaryRegister(BaseModel):
-    hospital_id: int = Field(..., description="ID of the hospital owning this dispensary")
+    hospital_id: Optional[int] = Field(None, description="Optional ID of associated hospital (None for independent dispensary)")
     name: str = Field(..., description="Dispensary name (e.g. Main Hospital Pharmacy)")
     email: EmailStr = Field(..., description="Unique login email for this dispensary")
     password: str = Field(..., min_length=6, description="Login password")
@@ -19,6 +19,31 @@ class DispensaryRegister(BaseModel):
     location: Optional[str] = Field(None, description="Physical location (e.g. Ground Floor, Wing B)")
     operating_hours: Optional[str] = Field(None, description="Operating hours (e.g. 08:00 - 20:00 Daily)")
     avg_prep_minutes: int = Field(15, ge=1, description="Average preparation time per order in minutes")
+
+
+class DispensaryLocationUpdate(BaseModel):
+    """Body for PATCH /api/dispensary/location — update GPS coordinates and address."""
+    latitude: float = Field(..., ge=-90, le=90, description="GPS latitude of the dispensary (-90 to 90)")
+    longitude: float = Field(..., ge=-180, le=180, description="GPS longitude of the dispensary (-180 to 180)")
+    address: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Human-readable address from reverse geocoding (optional)",
+    )
+
+    @field_validator("latitude")
+    @classmethod
+    def validate_latitude(cls, v: float) -> float:
+        if not (-90.0 <= v <= 90.0):
+            raise ValueError(f"latitude must be between -90 and 90, got {v}")
+        return v
+
+    @field_validator("longitude")
+    @classmethod
+    def validate_longitude(cls, v: float) -> float:
+        if not (-180.0 <= v <= 180.0):
+            raise ValueError(f"longitude must be between -180 and 180, got {v}")
+        return v
 
 
 class DispensaryLogin(BaseModel):

@@ -20,16 +20,16 @@ from database.db import get_conn, get_password_hash, verify_password
 # =============================================================================
 
 def create_dispensary(
-    hospital_id: int,
-    name: str,
-    email: str,
-    password: str,
+    hospital_id: Optional[int] = None,
+    name: str = "",
+    email: str = "",
+    password: str = "",
     phone: Optional[str] = None,
     location: Optional[str] = None,
     operating_hours: Optional[str] = None,
     avg_prep_minutes: int = 15,
 ) -> Optional[Dict[str, Any]]:
-    """Register a new dispensary organization belonging to a hospital.
+    """Register a new dispensary organization (independent or affiliated with a hospital).
 
     Returns dispensary dict on success, or None if email is taken.
     """
@@ -37,10 +37,11 @@ def create_dispensary(
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Check hospital exists
-            cur.execute("SELECT 1 FROM hospital WHERE hospital_id = %s", (hospital_id,))
-            if not cur.fetchone():
-                raise ValueError(f"Hospital with ID {hospital_id} does not exist.")
+            # Check hospital exists only if hospital_id is provided
+            if hospital_id is not None:
+                cur.execute("SELECT 1 FROM hospital WHERE hospital_id = %s", (hospital_id,))
+                if not cur.fetchone():
+                    raise ValueError(f"Hospital with ID {hospital_id} does not exist.")
 
             # Check email uniqueness
             cur.execute("SELECT 1 FROM dispensary WHERE email = %s", (email,))
@@ -90,7 +91,8 @@ def get_dispensary_by_email(email: str) -> Optional[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT dispensary_id, hospital_id, name, email, password_hash, phone,
-                       location, operating_hours, avg_prep_minutes, status, created_at
+                       location, address, latitude, longitude,
+                       operating_hours, avg_prep_minutes, status, created_at
                 FROM dispensary
                 WHERE email = %s
                 """,
@@ -107,6 +109,7 @@ def get_dispensary_by_id(dispensary_id: int) -> Optional[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT dispensary_id, hospital_id, name, email, phone, location,
+                       address, latitude, longitude,
                        operating_hours, avg_prep_minutes, status, created_at
                 FROM dispensary
                 WHERE dispensary_id = %s
@@ -129,6 +132,7 @@ def list_dispensaries_by_hospital(hospital_id: int) -> List[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT dispensary_id, hospital_id, name, email, phone, location,
+                       address, latitude, longitude,
                        operating_hours, avg_prep_minutes, status, created_at
                 FROM dispensary
                 WHERE hospital_id = %s
@@ -144,6 +148,57 @@ def list_dispensaries_by_hospital(hospital_id: int) -> List[Dict[str, Any]]:
                     item["created_at"] = str(item["created_at"])
                 results.append(item)
             return results
+
+
+def update_dispensary_location(
+    dispensary_id: int,
+    latitude: float,
+    longitude: float,
+    address: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Save or update the GPS location of a dispensary.
+
+    Validates coordinate ranges and returns the updated dispensary record.
+    Returns None if no matching dispensary row is found.
+    Raises ValueError on out-of-range coordinates or obviously invalid address.
+    """
+    # Validate ranges
+    if not (-90.0 <= latitude <= 90.0):
+        raise ValueError(f"latitude must be between -90 and 90, got {latitude}")
+    if not (-180.0 <= longitude <= 180.0):
+        raise ValueError(f"longitude must be between -180 and 180, got {longitude}")
+
+    # Normalize address: strip, collapse internal whitespace, limit length
+    clean_address: Optional[str] = None
+    if address is not None:
+        stripped = " ".join(address.split()).strip()
+        if stripped:
+            clean_address = stripped[:500]  # hard cap at 500 chars
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE dispensary
+                SET latitude    = %s,
+                    longitude   = %s,
+                    address     = %s,
+                    updated_at  = NOW()
+                WHERE dispensary_id = %s
+                RETURNING dispensary_id, hospital_id, name, email, phone, location,
+                          address, latitude, longitude,
+                          operating_hours, avg_prep_minutes, status, created_at, updated_at
+                """,
+                (latitude, longitude, clean_address, dispensary_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            res = dict(row)
+            for k in ("created_at", "updated_at"):
+                if res.get(k):
+                    res[k] = str(res[k])
+            return res
 
 
 # =============================================================================
@@ -565,7 +620,8 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
             # 6. Fetch prescription medicines and create request items
             cur.execute(
                 """
-                SELECT pm.prescription_medicine_id, pm.medicine_id, pm.name, pm.dosage
+                SELECT pm.prescription_medicine_id, pm.medicine_id, pm.name,
+                       pm.dosage, pm.match_status
                 FROM prescription_medicine pm
                 WHERE pm.prescription_id = %s
                 """,
@@ -576,11 +632,15 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
             item_statuses = []
             for pm in pm_rows:
                 med_id = pm["medicine_id"]
+                match_status = pm["match_status"]  # MATCHED|AMBIGUOUS|UNRESOLVED|NOT_A_MEDICINE|NULL
                 required_qty = 1  # Standard default per prescribed item
 
-                avail_status = "UNAVAILABLE"
-                if med_id:
-                    # Check free stock: available_quantity - reserved_quantity
+                if match_status in ("AMBIGUOUS", "UNRESOLVED", "NOT_A_MEDICINE"):
+                    # Surface the exact matcher verdict rather than a generic UNAVAILABLE.
+                    # The dispensary UI can then prompt the pharmacist to resolve manually.
+                    avail_status = match_status
+                elif med_id:
+                    # MATCHED — check actual stock at this dispensary.
                     cur.execute(
                         """
                         SELECT (available_quantity - reserved_quantity) AS free_stock
@@ -596,6 +656,14 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
                             avail_status = "AVAILABLE"
                         elif free_stock > 0:
                             avail_status = "PARTIAL"
+                        else:
+                            avail_status = "UNAVAILABLE"
+                    else:
+                        # medicine_id exists in catalog but no stock row at this dispensary
+                        avail_status = "UNAVAILABLE"
+                else:
+                    # medicine_id is NULL and match_status is NULL — legacy or unknown
+                    avail_status = "UNRESOLVED"
 
                 item_statuses.append(avail_status)
 
@@ -1079,7 +1147,36 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                     req.ready_at,
                     req.dispensed_at,
                     req.notes,
-                    req.created_at
+                    req.created_at,
+                    COALESCE(
+                        (
+                            SELECT json_agg(
+                                json_build_object(
+                                    'item_id', item.item_id,
+                                    'prescription_medicine_id', item.prescription_medicine_id,
+                                    'medicine_id', item.medicine_id,
+                                    'prescribed_medicine_name', pm.name,
+                                    'dosage', pm.dosage,
+                                    'frequency', pm.frequency,
+                                    'duration', pm.duration,
+                                    'instructions', pm.instructions,
+                                    'generic_name', m.generic_name,
+                                    'brand_name', m.brand_name,
+                                    'strength', m.strength,
+                                    'form', m.form,
+                                    'required_quantity', item.required_quantity,
+                                    'dispensed_quantity', item.dispensed_quantity,
+                                    'availability_status', item.availability_status,
+                                    'reserved', item.reserved
+                                ) ORDER BY item.item_id ASC
+                            )
+                            FROM dispensary_request_item item
+                            JOIN prescription_medicine pm ON pm.prescription_medicine_id = item.prescription_medicine_id
+                            LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
+                            WHERE item.request_id = req.request_id
+                        ),
+                        '[]'::json
+                    ) AS items
                 FROM dispensary_request req
                 JOIN dispensary d ON d.dispensary_id = req.dispensary_id
                 JOIN patient pt   ON pt.patient_id   = req.patient_id
@@ -1096,37 +1193,6 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                 return None
 
             request_detail = dict(row)
-
-            # Load item details
-            cur.execute(
-                """
-                SELECT
-                    item.item_id,
-                    item.prescription_medicine_id,
-                    item.medicine_id,
-                    pm.name             AS prescribed_medicine_name,
-                    pm.dosage,
-                    pm.frequency,
-                    pm.duration,
-                    pm.instructions,
-                    m.generic_name,
-                    m.brand_name,
-                    m.form,
-                    item.required_quantity,
-                    item.dispensed_quantity,
-                    item.availability_status,
-                    item.reserved
-                FROM dispensary_request_item item
-                JOIN prescription_medicine pm ON pm.prescription_medicine_id = item.prescription_medicine_id
-                LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
-                WHERE item.request_id = %s
-                ORDER BY item.item_id ASC
-                """,
-                (request_id,),
-            )
-            items = [dict(r) for r in cur.fetchall()]
-            request_detail["items"] = items
-
             for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob"):
                 if request_detail.get(k):
                     request_detail[k] = str(request_detail[k])
@@ -1140,18 +1206,78 @@ def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT req.request_id FROM dispensary_request req
+                SELECT
+                    req.request_id,
+                    req.prescription_id,
+                    req.dispensary_id,
+                    d.name              AS dispensary_name,
+                    d.location          AS dispensary_location,
+                    req.patient_id,
+                    pt.patient_code,
+                    u.full_name         AS patient_name,
+                    u.email             AS patient_email,
+                    u.phone             AS patient_phone,
+                    pt.date_of_birth    AS patient_dob,
+                    rx.issue_date,
+                    rx.diagnosis,
+                    rx.notes            AS prescription_notes,
+                    doc_u.full_name     AS doctor_name,
+                    doc.specialization  AS doctor_specialty,
+                    req.status,
+                    req.estimated_ready_at,
+                    req.ready_at,
+                    req.dispensed_at,
+                    req.notes,
+                    req.created_at,
+                    COALESCE(
+                        (
+                            SELECT json_agg(
+                                json_build_object(
+                                    'item_id', item.item_id,
+                                    'prescription_medicine_id', item.prescription_medicine_id,
+                                    'medicine_id', item.medicine_id,
+                                    'prescribed_medicine_name', pm.name,
+                                    'dosage', pm.dosage,
+                                    'frequency', pm.frequency,
+                                    'duration', pm.duration,
+                                    'instructions', pm.instructions,
+                                    'generic_name', m.generic_name,
+                                    'brand_name', m.brand_name,
+                                    'strength', m.strength,
+                                    'form', m.form,
+                                    'required_quantity', item.required_quantity,
+                                    'dispensed_quantity', item.dispensed_quantity,
+                                    'availability_status', item.availability_status,
+                                    'reserved', item.reserved
+                                ) ORDER BY item.item_id ASC
+                            )
+                            FROM dispensary_request_item item
+                            JOIN prescription_medicine pm ON pm.prescription_medicine_id = item.prescription_medicine_id
+                            LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
+                            WHERE item.request_id = req.request_id
+                        ),
+                        '[]'::json
+                    ) AS items
+                FROM dispensary_request req
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                JOIN patient pt   ON pt.patient_id   = req.patient_id
+                JOIN users   u    ON u.user_id        = pt.user_id
+                JOIN prescription rx ON rx.prescription_id = req.prescription_id
+                LEFT JOIN doctor doc ON doc.doctor_id = rx.doctor_id
+                LEFT JOIN users doc_u ON doc_u.user_id = doc.user_id
                 WHERE req.patient_id = %s
                 ORDER BY req.created_at DESC
                 """,
                 (patient_id,),
             )
-            req_rows = cur.fetchall()
+            rows = cur.fetchall()
             results = []
-            for r in req_rows:
-                detail = get_request_detail(None, r["request_id"])
-                if detail:
-                    results.append(detail)
+            for r in rows:
+                item = dict(r)
+                for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob"):
+                    if item.get(k):
+                        item[k] = str(item[k])
+                results.append(item)
             return results
 
 

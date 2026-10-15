@@ -24,6 +24,7 @@ from models.dispensary import (
     AvailabilityMedicineInput,
     DispenseRequestBody,
     DispensaryLogin,
+    DispensaryLocationUpdate,
     DispensaryRegister,
     PrescriptionAvailabilityRequest,
     StockAddOrUpdateRequest,
@@ -101,6 +102,39 @@ def get_dispensary_profile(current_dispensary: dict = Depends(require_dispensary
     profile = dict(current_dispensary)
     profile["dispensary_code"] = f"RXF-DISP-{current_dispensary['dispensary_id']}"
     return profile
+
+
+@router.patch("/location")
+@router.put("/location")
+def update_dispensary_location(
+    body: DispensaryLocationUpdate,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Save or update the GPS location (lat, lng, address) of the authenticated dispensary.
+
+    The dispensary_id is taken from the JWT — the client cannot choose which
+    dispensary to update. Coordinates are validated on the Pydantic model and
+    again inside the service layer.
+    """
+    dispensary_id = current_dispensary["dispensary_id"]
+    try:
+        updated = dispensary_service.update_dispensary_location(
+            dispensary_id=dispensary_id,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            address=body.address,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Dispensary not found.")
+
+    updated["dispensary_code"] = f"RXF-DISP-{updated['dispensary_id']}"
+    return {
+        "message": "Location saved successfully.",
+        "dispensary": updated,
+    }
 
 
 @router.get("/lookup/{code}")
@@ -194,26 +228,66 @@ def search_medicine_catalog(
     limit: int = Query(20, ge=1, le=100),
     current_dispensary: dict = Depends(require_dispensary()),
 ):
-    """Search master medicine catalog to select medicines when adding stock."""
+    """Search master medicine catalog to select medicines when adding stock.
+    
+    Returns distinguishable candidates preserving legitimate strength, form,
+    and formulation alternatives without silently collapsing them.
+    """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if q:
+            if q and q.strip():
+                q_clean = q.strip()
                 cur.execute(
                     """
-                    SELECT medicine_id, generic_name, brand_name, category, strength, form
-                    FROM medicine
-                    WHERE generic_name ILIKE %s OR brand_name ILIKE %s OR category ILIKE %s
-                    ORDER BY generic_name ASC
+                    SELECT
+                        m.medicine_id,
+                        m.generic_name,
+                        COALESCE(m.brand_name, ma.alias_name) AS brand_name,
+                        m.category,
+                        m.strength,
+                        m.form,
+                        m.rxcui
+                    FROM medicine m
+                    LEFT JOIN (
+                        SELECT DISTINCT ON (medicine_id) medicine_id, alias_name
+                        FROM medicine_alias
+                        WHERE alias_name ILIKE %s
+                        ORDER BY medicine_id, LENGTH(alias_name) ASC
+                    ) ma ON ma.medicine_id = m.medicine_id
+                    WHERE m.generic_name ILIKE %s
+                       OR m.brand_name ILIKE %s
+                       OR m.rxnorm_name ILIKE %s
+                       OR ma.alias_name IS NOT NULL
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(m.generic_name) = LOWER(%s) THEN 0
+                            WHEN LOWER(COALESCE(m.brand_name, ma.alias_name, '')) = LOWER(%s) THEN 1
+                            WHEN m.generic_name ILIKE %s THEN 2
+                            ELSE 3
+                        END,
+                        m.generic_name ASC,
+                        m.strength ASC NULLS LAST,
+                        m.form ASC NULLS LAST,
+                        m.medicine_id ASC
                     LIMIT %s
                     """,
-                    (f"%{q}%", f"%{q}%", f"%{q}%", limit),
+                    (
+                        f"%{q_clean}%",
+                        f"%{q_clean}%",
+                        f"%{q_clean}%",
+                        f"%{q_clean}%",
+                        q_clean,
+                        q_clean,
+                        f"{q_clean}%",
+                        limit,
+                    ),
                 )
             else:
                 cur.execute(
                     """
-                    SELECT medicine_id, generic_name, brand_name, category, strength, form
+                    SELECT medicine_id, generic_name, brand_name, category, strength, form, rxcui
                     FROM medicine
-                    ORDER BY generic_name ASC
+                    ORDER BY generic_name ASC, strength ASC NULLS LAST, form ASC NULLS LAST, medicine_id ASC
                     LIMIT %s
                     """,
                     (limit,),
@@ -471,6 +545,13 @@ def get_medicine_availability(
     The caller must ensure dispensary_id matches their own dispensary or have
     appropriate access; currently restricted to authenticated dispensary accounts.
     """
+    # Enforce dispensary ownership: an authenticated dispensary can only inspect its own inventory
+    if current_dispensary.get("dispensary_id") != dispensary_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You cannot access availability data for another dispensary.",
+        )
+
     try:
         return availability_service.get_medicine_availability(
             dispensary_id=dispensary_id,
@@ -498,6 +579,13 @@ def get_prescription_availability(
 
     Stock is **not** reserved or decremented by this endpoint.
     """
+    # Enforce dispensary ownership: an authenticated dispensary can only inspect its own inventory
+    if current_dispensary.get("dispensary_id") != dispensary_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You cannot access availability data for another dispensary.",
+        )
+
     medicines = [m.model_dump() for m in body.medicines]
     try:
         return availability_service.get_prescription_availability(
