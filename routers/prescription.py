@@ -255,3 +255,38 @@ def resolve_medicine(
             detail=f"Prescription medicine #{pm_id} not found or access denied.",
         )
     return {"message": "Medicine resolved successfully.", "medicine": result}
+
+@router.post(
+    "/api/patient/prescriptions/{prescription_id}/ai-resolve",
+    summary="Fast AI fallback: predict and generalize all unreviewed ambiguous/unresolved medicines",
+)
+def ai_resolve_prescription_route(
+    prescription_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    from database.db import get_conn
+    import psycopg2.extras
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT rx.prescription_id
+                FROM prescription rx
+                JOIN patient pt ON pt.patient_id = rx.patient_id
+                WHERE rx.prescription_id = %s AND pt.user_id = %s
+                """,
+                (prescription_id, current_user["id"]),
+            )
+            if not cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Prescription not found or access denied."
+                )
+
+    from services.ai_medicine_fallback import resolve_unresolved_prescription_medicines
+    report = resolve_unresolved_prescription_medicines(prescription_id)
+    return {
+        "message": f"AI fallback resolved {report['resolved_count']} medicine(s).",
+        "report": report,
+    }

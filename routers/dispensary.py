@@ -736,3 +736,30 @@ def get_prescription_availability(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+@router.post(
+    "/requests/{request_id}/ai-resolve",
+    summary="Fast AI fallback: auto-resolve and generalize ambiguous/unresolved medicines in order",
+    tags=["requests"],
+)
+def ai_resolve_request_items_route(
+    request_id: int,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    disp_id = current_dispensary["dispensary_id"]
+    req = dispensary_service.get_request_detail(disp_id, request_id)
+    if not req:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dispensary request #{request_id} not found."
+        )
+
+    from services.ai_medicine_fallback import resolve_unresolved_prescription_medicines
+    report = resolve_unresolved_prescription_medicines(req["prescription_id"], dispensary_id=disp_id)
+    updated_req = dispensary_service.get_request_detail(disp_id, request_id)
+
+    return {
+        "message": f"AI fallback resolved {report['resolved_count']} medicine(s).",
+        "report": report,
+        "request": updated_req,
+    }
