@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   X, UserCheck, FileText, ChevronDown, ChevronUp, Printer,
   ShieldCheck, KeyRound, CheckCircle, AlertTriangle, Stethoscope,
-  Clock, ArrowRight, Check, Send, Sparkles
+  Clock, ArrowRight, Check, Send, Sparkles, RefreshCw
 } from 'lucide-react';
 import { aiResolveRequestItems, type RequestDetail, type RequestItemDetail, type InventoryItem } from '../../../lib/dispensaryApi';
 import { RequestStatusBadge, MatchStatusBadge, AvailStatusBadge } from './StatusBadge';
@@ -41,6 +41,7 @@ interface Props {
   onItemDecision?: (itemId: number, decision: any, quantity?: number, substituteMedicineId?: number, notes?: string) => Promise<void>;
   onVerify?: (checklist: any) => Promise<void>;
   onAiResolve?: () => Promise<void> | void;
+  onReload?: () => void | Promise<void>;
   onMarkReady: () => void;
   onDispense: (notes: string, pickupCode?: string) => void;
   onCancel: () => void;
@@ -61,10 +62,25 @@ function fmtTime(s: string | null | undefined) {
 
 export default function RequestDetailPanel({
   detail, loading, inventory = [], currentPharmacistName,
-  onClose, onProcess, onApprove, onReconsult, onItemDecision, onVerify, onAiResolve,
+  onClose, onProcess, onApprove, onReconsult, onItemDecision, onVerify, onAiResolve, onReload,
   onMarkReady, onDispense, onCancel, toast
 }: Props) {
   const [aiResolving, setAiResolving] = useState(false);
+  const [syncingStock, setSyncingStock] = useState(false);
+
+  const handleRecheckStock = async () => {
+    setSyncingStock(true);
+    try {
+      if (onReload) {
+        await onReload();
+      }
+      toast('Prescription inventory checked against live pharmacy stock.', 'ok');
+    } catch {
+      toast('Failed to synchronize stock.', 'err');
+    } finally {
+      setSyncingStock(false);
+    }
+  };
   const [editingItem, setEditingItem] = useState<RequestItemDetail | null>(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [notes, setNotes] = useState('');
@@ -163,6 +179,16 @@ export default function RequestDetailPanel({
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <button
+            type="button"
+            className="disp-btn disp-btn--ghost disp-btn--sm"
+            onClick={handleRecheckStock}
+            title="Recheck live dispensary inventory and generic equivalent stock for this ticket"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--disp-accent)', padding: '0.3rem 0.55rem' }}
+          >
+            <RefreshCw size={14} className={syncingStock ? 'disp-spin' : ''} />
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Sync Stock</span>
+          </button>
           <button
             type="button"
             className="disp-btn disp-btn--ghost disp-btn--sm"
@@ -491,18 +517,18 @@ export default function RequestDetailPanel({
                       </div>
                     )}
 
-                    {/* Substitute details if provided */}
+                    {/* Substitute or in-stock generic equivalent details */}
                     {(item.suggested_substitute_id || item.substitute_name) && (
                       <div style={{
                         marginTop: '0.45rem',
                         padding: '0.35rem 0.6rem',
-                        background: 'rgba(2, 132, 199, 0.08)',
+                        background: item.availability_status === 'AVAILABLE' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(2, 132, 199, 0.08)',
                         borderRadius: '0.4rem',
                         fontSize: '0.75rem',
-                        color: '#0369a1',
-                        border: '1px solid rgba(2, 132, 199, 0.2)',
+                        color: item.availability_status === 'AVAILABLE' ? '#047857' : '#0369a1',
+                        border: item.availability_status === 'AVAILABLE' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(2, 132, 199, 0.2)',
                       }}>
-                        <strong>⇄ Generic Substitute:</strong> {item.substitute_brand || item.substitute_name} {item.substitute_strength || ''} {item.substitute_form ? `(${item.substitute_form})` : ''}
+                        <strong>{item.availability_status === 'AVAILABLE' ? '✓ In-Stock Generic Equivalent:' : '⇄ Generic Substitute:'}</strong> {item.substitute_brand || item.substitute_name} {item.substitute_strength || ''} {item.substitute_form ? `(${item.substitute_form})` : ''}
                       </div>
                     )}
 

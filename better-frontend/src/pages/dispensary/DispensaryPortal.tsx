@@ -67,6 +67,7 @@ interface QueueTabProps {
   onItemDecision: (requestId: number, itemId: number, decision: any, quantity?: number, substituteMedicineId?: number, notes?: string) => Promise<void>;
   onVerify: (requestId: number, checklist: any) => Promise<void>;
   onAiResolve: (id: number) => Promise<void> | void;
+  onReloadDetail?: (id: number) => Promise<void> | void;
   onMarkReady: (id: number) => void;
   onDispense: (id: number, notes: string, pickupCode?: string) => void;
   onCancel: (id: number) => void;
@@ -80,7 +81,7 @@ function QueueTab({
   selectedReqId, selectedReqDetail, detailLoading,
   inventory, currentPharmacistName,
   onSelectReq, onCloseDetail,
-  onProcess, onApprove, onReconsult, onItemDecision, onVerify, onAiResolve,
+  onProcess, onApprove, onReconsult, onItemDecision, onVerify, onAiResolve, onReloadDetail,
   onMarkReady, onDispense, onCancel,
   actionLoading, onScanOpen, toast,
 }: QueueTabProps) {
@@ -206,6 +207,7 @@ function QueueTab({
                 }
                 onVerify={(checklist) => onVerify(selectedReqDetail.request_id, checklist)}
                 onAiResolve={() => onAiResolve(selectedReqDetail.request_id)}
+                onReload={() => onReloadDetail ? onReloadDetail(selectedReqDetail.request_id) : undefined}
                 onMarkReady={() => onMarkReady(selectedReqDetail.request_id)}
                 onDispense={(notes, pickupCode) => onDispense(selectedReqDetail.request_id, notes, pickupCode)}
                 onCancel={() => onCancel(selectedReqDetail.request_id)}
@@ -1174,6 +1176,7 @@ export default function DispensaryPortal() {
             onItemDecision={handleItemDecision}
             onVerify={handleVerify}
             onAiResolve={handleAiResolve}
+            onReloadDetail={loadDetail}
             onMarkReady={handleMarkReady}
             onDispense={handleDispense}
             onCancel={handleCancel}
