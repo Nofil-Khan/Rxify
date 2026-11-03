@@ -456,6 +456,7 @@ def dispense_request(
     dispensary_id = current_dispensary["dispensary_id"]
     items_input = [i.model_dump() for i in body.items] if body and body.items else None
     notes = body.notes if body else None
+    pickup_code = body.pickup_code if body else None
 
     try:
         updated = dispensary_service.dispense_request(
@@ -463,6 +464,7 @@ def dispense_request(
             request_id=request_id,
             items_input=items_input,
             notes=notes,
+            pickup_code=pickup_code,
         )
         return {
             "message": "Medicines successfully dispensed. Stock updated.",

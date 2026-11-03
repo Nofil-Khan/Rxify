@@ -341,12 +341,14 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
                 ready_at            TIMESTAMPTZ,
                 dispensed_at        TIMESTAMPTZ,
                 notes               TEXT,
+                pickup_code         VARCHAR(6),
                 created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE (prescription_id, dispensary_id)
             );
             """
         )
+        cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS pickup_code VARCHAR(6);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_dispensary_id ON dispensary_request(dispensary_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_prescription_id ON dispensary_request(prescription_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_status ON dispensary_request(status);")
@@ -624,10 +626,12 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
                        p.patient_id,
                        p.patient_code,
                        d.doctor_id,
-                       d.specialization AS specialty
+                       d.specialization AS specialty,
+                       disp.dispensary_id
                 FROM   users u
                 LEFT JOIN patient p ON p.user_id = u.user_id
                 LEFT JOIN doctor  d ON d.user_id = u.user_id
+                LEFT JOIN dispensary disp ON disp.email = u.email
                 WHERE  u.email = %s
                 """,
                 (email,),
@@ -650,10 +654,12 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
                        p.patient_id,
                        p.patient_code,
                        d.doctor_id,
-                       d.specialization AS specialty
+                       d.specialization AS specialty,
+                       disp.dispensary_id
                 FROM   users u
                 LEFT JOIN patient p ON p.user_id = u.user_id
                 LEFT JOIN doctor  d ON d.user_id = u.user_id
+                LEFT JOIN dispensary disp ON disp.email = u.email
                 WHERE  u.user_id = %s
                 """,
                 (user_id,),

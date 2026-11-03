@@ -705,6 +705,7 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
                 (patient_user_id, "Dispensary Prescription Received", msg_text),
             )
 
+            conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -814,6 +815,7 @@ def process_request(dispensary_id: int, request_id: int) -> Dict[str, Any]:
                 (req["patient_user_id"],),
             )
 
+            conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -854,6 +856,7 @@ def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
                 (req["patient_user_id"], msg),
             )
 
+            conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -862,6 +865,7 @@ def dispense_request(
     request_id: int,
     items_input: Optional[List[Dict[str, Any]]] = None,
     notes: Optional[str] = None,
+    pickup_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Finalize dispensing: deduct physical stock, clear reservations, set DISPENSED status.
 
@@ -872,7 +876,7 @@ def dispense_request(
             # 1. Lock request row
             cur.execute(
                 """
-                SELECT req.request_id, req.patient_id, req.status, p.user_id AS patient_user_id
+                SELECT req.request_id, req.patient_id, req.status, req.pickup_code, p.user_id AS patient_user_id
                 FROM dispensary_request req
                 JOIN patient p ON p.patient_id = req.patient_id
                 WHERE req.request_id = %s AND req.dispensary_id = %s
@@ -888,6 +892,14 @@ def dispense_request(
                 raise ValueError("Request is already marked DISPENSED.")
             if req["status"] == "CANCELLED":
                 raise ValueError("Cannot dispense a cancelled request.")
+
+            # Validate 6-digit handover verification code if set
+            expected_code = (req.get("pickup_code") or "").strip()
+            if expected_code:
+                if not pickup_code or pickup_code.strip() != expected_code:
+                    raise ValueError(
+                        f"Invalid pickup verification code. Please ask the patient for the 6-digit code on their ticket."
+                    )
 
             # 2. Process each item
             cur.execute(
@@ -988,6 +1000,7 @@ def dispense_request(
                 (req["patient_user_id"],),
             )
 
+            conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -1064,6 +1077,7 @@ def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = N
                 (req["patient_user_id"],),
             )
 
+            conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -1091,6 +1105,8 @@ def get_dispensary_queue(dispensary_id: int, status_filter: Optional[str] = None
                     pt.patient_code,
                     req.status,
                     req.estimated_ready_at,
+                    req.pickup_code,
+                    req.notes,
                     req.created_at,
                     COUNT(item.item_id) AS total_items
                 FROM dispensary_request req
@@ -1100,7 +1116,7 @@ def get_dispensary_queue(dispensary_id: int, status_filter: Optional[str] = None
                 WHERE req.dispensary_id = %s
                 {where_extra}
                 GROUP BY req.request_id, req.prescription_id, req.patient_id,
-                         u.full_name, pt.patient_code, req.status, req.estimated_ready_at, req.created_at
+                         u.full_name, pt.patient_code, req.status, req.estimated_ready_at, req.pickup_code, req.notes, req.created_at
                 ORDER BY req.created_at ASC
                 """,
                 params,
@@ -1146,6 +1162,7 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                     req.estimated_ready_at,
                     req.ready_at,
                     req.dispensed_at,
+                    req.pickup_code,
                     req.notes,
                     req.created_at,
                     COALESCE(
@@ -1227,6 +1244,7 @@ def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
                     req.estimated_ready_at,
                     req.ready_at,
                     req.dispensed_at,
+                    req.pickup_code,
                     req.notes,
                     req.created_at,
                     COALESCE(

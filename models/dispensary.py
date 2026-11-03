@@ -76,6 +76,7 @@ class DispenseItemInput(BaseModel):
 class DispenseRequestBody(BaseModel):
     items: Optional[List[DispenseItemInput]] = Field(None, description="List of item quantities dispensed")
     notes: Optional[str] = Field(None, description="Pharmacist notes or instructions")
+    pickup_code: Optional[str] = Field(None, description="6-digit verification code provided by patient at counter")
 
 
 # ── Inventory Availability (read-only, no reservation) ───────────────────────
