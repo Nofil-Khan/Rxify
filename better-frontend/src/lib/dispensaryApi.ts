@@ -79,6 +79,8 @@ export interface QueueItemSummary {
   patient_code: string | null;
   status: 'PENDING' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED';
   estimated_ready_at: string | null;
+  pickup_code?: string | null;
+  notes?: string | null;
   created_at: string;
   total_items: number;
 }
@@ -123,6 +125,7 @@ export interface RequestDetail {
   estimated_ready_at: string | null;
   ready_at: string | null;
   dispensed_at: string | null;
+  pickup_code?: string | null;
   notes: string | null;
   created_at: string;
   items: RequestItemDetail[];
@@ -256,11 +259,12 @@ export function markDispensaryRequestReady(requestId: number): Promise<{ message
 /** POST /api/dispensary/requests/:id/dispense */
 export function dispenseDispensaryRequest(
   requestId: number,
-  notes?: string
+  notes?: string,
+  pickupCode?: string,
 ): Promise<{ message: string; request: RequestDetail }> {
   return req(`/api/dispensary/requests/${requestId}/dispense`, {
     method: 'POST',
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({ notes, pickup_code: pickupCode }),
   });
 }
 

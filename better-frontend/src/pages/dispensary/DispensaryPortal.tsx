@@ -3,7 +3,7 @@ import {
   Building2, Package, LayoutDashboard, Clock,
   RefreshCw, Search, Plus, LogOut, Sun, Moon,
   QrCode, AlertTriangle, Upload, Camera, ShieldCheck,
-  XCircle, MapPin,
+  XCircle, MapPin, Volume2, VolumeX, BellRing, X,
 } from 'lucide-react';
 import { useAuthStore } from '../../lib/auth';
 import { useNavigate } from '@tanstack/react-router';
@@ -57,7 +57,7 @@ interface QueueTabProps {
   onCloseDetail: () => void;
   onProcess: (id: number) => void;
   onMarkReady: (id: number) => void;
-  onDispense: (id: number, notes: string) => void;
+  onDispense: (id: number, notes: string, pickupCode?: string) => void;
   onCancel: (id: number) => void;
   actionLoading: boolean;
   onScanOpen: () => void;
@@ -185,7 +185,7 @@ function QueueTab({
                 onClose={onCloseDetail}
                 onProcess={() => onProcess(selectedReqDetail.request_id)}
                 onMarkReady={() => onMarkReady(selectedReqDetail.request_id)}
-                onDispense={(notes) => onDispense(selectedReqDetail.request_id, notes)}
+                onDispense={(notes, pickupCode) => onDispense(selectedReqDetail.request_id, notes, pickupCode)}
                 onCancel={() => onCancel(selectedReqDetail.request_id)}
                 toast={toast}
               />
@@ -480,6 +480,28 @@ function DashboardTab({ stats, alerts, statsLoading, onReplenish }: DashboardTab
 
 // ─── Main Shell ───────────────────────────────────────────────────────────────
 
+
+function playOrderChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+  } catch {
+    // AudioContext blocked or not supported
+  }
+}
+
 export default function DispensaryPortal() {
   const { clearAuth }  = useAuthStore();
   const navigate       = useNavigate();
@@ -499,6 +521,11 @@ export default function DispensaryPortal() {
   const [selectedReqDetail, setSelectedReqDetail] = useState<RequestDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  /* Live Sound & Notification Alert States */
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [newOrderAlert, setNewOrderAlert] = useState<{ id: number; patient: string; rxId: number } | null>(null);
+  const prevQueueIdsRef = useRef<Set<number>>(new Set());
 
   /* Inventory */
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -542,6 +569,26 @@ export default function DispensaryPortal() {
       if (tab === 'queue') {
         const q = await fetchDispensaryQueue();
         setQueue(q);
+
+        // Detect newly arrived orders in real-time
+        const currentIds = new Set(q.map((item) => item.request_id));
+        if (prevQueueIdsRef.current.size > 0) {
+          const newlyAdded = q.find(
+            (item) => !prevQueueIdsRef.current.has(item.request_id) && item.status === 'PENDING'
+          );
+          if (newlyAdded) {
+            if (soundEnabled) {
+              playOrderChime();
+            }
+            setNewOrderAlert({
+              id: newlyAdded.request_id,
+              patient: newlyAdded.patient_name,
+              rxId: newlyAdded.prescription_id,
+            });
+            toast(`🔔 New Prescription Order #${newlyAdded.prescription_id} from ${newlyAdded.patient_name}!`, 'ok');
+          }
+        }
+        prevQueueIdsRef.current = currentIds;
       } else if (tab === 'inventory') {
         const inv = await fetchInventory();
         setInventory(inv);
@@ -559,7 +606,7 @@ export default function DispensaryPortal() {
 
   useEffect(() => {
     loadTabData(false);
-    const interval = setInterval(() => loadTabData(true), 20000);
+    const interval = setInterval(() => loadTabData(true), 8000);
     return () => clearInterval(interval);
   }, [loadTabData]);
 
@@ -661,8 +708,8 @@ export default function DispensaryPortal() {
     loadTabData(true);
   });
 
-  const handleDispense = (id: number, notes: string) => withAction(async () => {
-    const res = await dispenseDispensaryRequest(id, notes);
+  const handleDispense = (id: number, notes: string, pickupCode?: string) => withAction(async () => {
+    const res = await dispenseDispensaryRequest(id, notes, pickupCode);
     toast('Medicines dispensed. Stock updated.', 'ok');
     if (res?.request) {
       detailCacheRef.current.set(id, res.request);
@@ -777,6 +824,18 @@ export default function DispensaryPortal() {
           </div>
 
           <div className="disp-header-actions">
+            <button
+              className="disp-btn disp-btn--ghost"
+              onClick={() => {
+                setSoundEnabled(!soundEnabled);
+                toast(soundEnabled ? 'Order sound chime muted.' : 'Order sound chime enabled.', 'info');
+              }}
+              title={soundEnabled ? 'Live Order Sound Alerts Active (Click to Mute)' : 'Live Order Sound Alerts Muted (Click to Enable)'}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              {soundEnabled ? <Volume2 size={15} style={{ color: '#10b981' }} /> : <VolumeX size={15} style={{ color: 'var(--text-secondary)' }} />}
+              <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{soundEnabled ? 'Alerts ON' : 'Muted'}</span>
+            </button>
             <button className="disp-btn disp-btn--ghost" style={{ fontSize: '0.78rem' }} onClick={() => setShowShareModal(true)}>
               <ShieldCheck size={13} /> {dispCode}
             </button>
@@ -788,6 +847,51 @@ export default function DispensaryPortal() {
             </button>
           </div>
         </div>
+
+        {/* Live Incoming Order Alert Banner */}
+        {newOrderAlert && (
+          <div style={{
+            margin: '0 0 1rem 0',
+            padding: '0.85rem 1.25rem',
+            borderRadius: '0.65rem',
+            background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(99, 102, 241, 0.18))',
+            border: '1.5px solid #0284c7',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <BellRing size={20} style={{ color: '#0284c7', animation: 'bounce 1s infinite' }} />
+              <div>
+                <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                  🔔 New Prescription Fulfillment Order #{newOrderAlert.rxId} Received!
+                </span>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  Patient: {newOrderAlert.patient} • Ready to be reviewed & prepared
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                className="disp-btn disp-btn--primary disp-btn--sm"
+                onClick={() => {
+                  setTab('queue');
+                  handleSelectReq(newOrderAlert.id);
+                  setNewOrderAlert(null);
+                }}
+              >
+                Open Ticket
+              </button>
+              <button
+                className="disp-btn disp-btn--ghost disp-btn--sm"
+                onClick={() => setNewOrderAlert(null)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tab content */}
         {tab === 'queue' && (

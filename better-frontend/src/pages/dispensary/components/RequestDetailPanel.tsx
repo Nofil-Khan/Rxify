@@ -1,9 +1,10 @@
 /** Request Detail Panel — shown in the right pane of the queue view */
 import { useState } from 'react';
-import { X, UserCheck, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, UserCheck, FileText, ChevronDown, ChevronUp, Printer, ShieldCheck, KeyRound } from 'lucide-react';
 import type { RequestDetail } from '../../../lib/dispensaryApi';
 import { RequestStatusBadge, MatchStatusBadge, AvailStatusBadge } from './StatusBadge';
 import type { ToastVariant } from './useToast';
+import DosageLabelsModal from './DosageLabelsModal';
 
 // Match-status human explanations shown to the pharmacist
 const MATCH_REASON: Record<string, { text: string; cls: string }> = {
@@ -18,7 +19,7 @@ interface Props {
   onClose: () => void;
   onProcess: () => void;
   onMarkReady: () => void;
-  onDispense: (notes: string) => void;
+  onDispense: (notes: string, pickupCode?: string) => void;
   onCancel: () => void;
   toast: (msg: string, v?: ToastVariant) => void;
 }
@@ -35,10 +36,12 @@ function fmtTime(s: string | null | undefined) {
   catch { return s; }
 }
 
-export default function RequestDetailPanel({ detail, loading, onClose, onProcess, onMarkReady, onDispense, onCancel }: Props) {
+export default function RequestDetailPanel({ detail, loading, onClose, onProcess, onMarkReady, onDispense, onCancel, toast }: Props) {
   const [notes, setNotes] = useState('');
+  const [pickupCodeInput, setPickupCodeInput] = useState('');
   const [showCancel, setShowCancel] = useState(false);
   const [showMedDetails, setShowMedDetails] = useState(true);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const st = detail.status;
   const initials = detail.patient_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -51,6 +54,17 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
     (i) => i.availability_status === 'UNAVAILABLE'
   ).length ?? 0;
 
+  const handleConfirmDispense = () => {
+    const entered = pickupCodeInput.trim();
+    if (detail.pickup_code && entered.length !== 6) {
+      toast('Please enter the 6-digit pickup verification code provided by the patient.', 'err');
+      return;
+    }
+    onDispense(notes, entered);
+    setNotes('');
+    setPickupCodeInput('');
+  };
+
   return (
     <div className="disp-detail">
       {/* Header */}
@@ -61,7 +75,17 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
             Rx #{detail.prescription_id} · {fmtTime(detail.created_at)}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <button
+            type="button"
+            className="disp-btn disp-btn--ghost disp-btn--sm"
+            onClick={() => setShowPrintModal(true)}
+            title="Print Dosage Labels & Handover Receipt"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#0284c7', padding: '0.3rem 0.55rem' }}
+          >
+            <Printer size={15} />
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Print</span>
+          </button>
           <RequestStatusBadge status={detail.status} />
           <button className="disp-btn disp-btn--icon" onClick={onClose} title="Close">
             <X size={15} />
@@ -98,87 +122,104 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
             <div className="disp-meta-label">Issue Date</div>
             <div className="disp-meta-value">{fmtDate(detail.issue_date)}</div>
           </div>
-          <div>
-            <div className="disp-meta-label">Diagnosis</div>
-            <div className="disp-meta-value">{detail.diagnosis ?? '—'}</div>
-          </div>
-          {detail.prescription_notes && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div className="disp-meta-label">Notes</div>
-              <div className="disp-meta-value" style={{ fontSize: '0.8rem' }}>{detail.prescription_notes}</div>
+          {detail.estimated_ready_at && (
+            <div>
+              <div className="disp-meta-label">Est. Ready</div>
+              <div className="disp-meta-value">{fmtTime(detail.estimated_ready_at)}</div>
             </div>
           )}
         </div>
 
-        {/* Attention callouts */}
-        {unresolvedCount > 0 && (
-          <div className="disp-medicine-warning" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem' }}>
-            <FileText size={13} />
-            {unresolvedCount} medicine{unresolvedCount > 1 ? 's' : ''} could not be identified — manual pharmacist review required.
-          </div>
-        )}
-        {unavailCount > 0 && (
-          <div className="disp-medicine-warning" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', background: 'var(--disp-err-bg)', borderColor: 'var(--disp-err-border)', color: 'var(--disp-err-text)' }}>
-            <FileText size={13} />
-            {unavailCount} medicine{unavailCount > 1 ? 's' : ''} out of stock at this dispensary.
+        {/* Diagnosis & prescription notes */}
+        {(detail.diagnosis || detail.prescription_notes) && (
+          <div className="disp-rx-notes">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, marginBottom: 4 }}>
+              <FileText size={13} /> Clinical Info
+            </div>
+            {detail.diagnosis && <div><strong>Dx:</strong> {detail.diagnosis}</div>}
+            {detail.prescription_notes && <div style={{ marginTop: 2 }}><strong>Rx Notes:</strong> {detail.prescription_notes}</div>}
           </div>
         )}
 
-        {/* Medicines */}
-        <div>
+        {/* Patient fulfillment notes */}
+        {detail.notes && (
+          <div style={{
+            background: 'rgba(2, 132, 199, 0.08)',
+            border: '1px solid rgba(2, 132, 199, 0.25)',
+            borderRadius: '0.45rem',
+            padding: '0.55rem 0.75rem',
+            marginBottom: '0.75rem',
+            fontSize: '0.82rem',
+            color: 'var(--text-primary)',
+          }}>
+            <div style={{ fontWeight: 700, color: '#0284c7', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+              Patient Fulfillment Notes
+            </div>
+            <div>{detail.notes}</div>
+          </div>
+        )}
+
+        {/* Unresolved / Out-of-Stock warnings */}
+        {(unresolvedCount > 0 || unavailCount > 0) && (
+          <div className="disp-alert-banner">
+            {unresolvedCount > 0 && (
+              <div>⚠️ {unresolvedCount} medicine{unresolvedCount > 1 ? 's require' : ' requires'} clarification or manual check.</div>
+            )}
+            {unavailCount > 0 && (
+              <div>❌ {unavailCount} medicine{unavailCount > 1 ? 's are' : ' is'} out of stock.</div>
+            )}
+          </div>
+        )}
+
+        {/* Medicine items */}
+        <div style={{ marginBottom: '1rem' }}>
           <button
-            className="disp-medicines-header"
-            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-            onClick={() => setShowMedDetails((v) => !v)}
+            type="button"
+            className="disp-section-toggle"
+            onClick={() => setShowMedDetails(!showMedDetails)}
           >
-            <span>Prescribed Medicines ({detail.items?.length ?? 0})</span>
-            {showMedDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            <span>Medicines ({detail.items?.length ?? 0})</span>
+            {showMedDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
 
           {showMedDetails && (
-            <div style={{ marginTop: '0.5rem' }}>
-              {(!detail.items || detail.items.length === 0) && loading && (
-                <div style={{ padding: '0.5rem 0', display: 'grid', gap: '0.5rem' }}>
-                  <div className="disp-skeleton" style={{ height: 42 }} />
-                  <div className="disp-skeleton" style={{ height: 42 }} />
-                </div>
-              )}
-              {(!detail.items || detail.items.length === 0) && !loading && (
-                <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--disp-text-muted)' }}>
-                  No medicine items recorded.
-                </div>
-              )}
+            <div className="disp-items-list">
               {detail.items?.map((item) => {
-                const matchSt = (item as any).match_status as string | undefined;
-                const reason = matchSt ? MATCH_REASON[matchSt] : undefined;
-                const resolvedName = item.generic_name ?? item.brand_name;
-
+                const warn = MATCH_REASON[item.availability_status];
                 return (
-                  <div key={item.item_id} className="disp-medicine-row">
-                    <div style={{ minWidth: 0 }}>
-                      <div className="disp-medicine-name">{item.prescribed_medicine_name}</div>
-                      {resolvedName && (
-                        <div className="disp-medicine-resolved">
-                          → {resolvedName}{item.strength ? ` · ${item.strength}` : ''}{item.form ? ` · ${item.form}` : ''}
-                        </div>
-                      )}
-                      <div className="disp-medicine-meta">
-                        {item.dosage && <span>Dose: {item.dosage}</span>}
-                        {item.frequency && <span>Freq: {item.frequency}</span>}
-                        {item.duration && <span>Duration: {item.duration}</span>}
-                        <span>Qty: {item.required_quantity}</span>
-                        {item.reserved && <span style={{ color: 'var(--disp-ok-text)', fontWeight: 600 }}>Reserved</span>}
+                  <div key={item.item_id} className="disp-item-card">
+                    <div className="disp-item-header">
+                      <div>
+                        <span className="disp-item-name">{item.prescribed_medicine_name}</span>
+                        {item.generic_name && (
+                          <div className="disp-item-generic">{item.generic_name}</div>
+                        )}
+                        {item.brand_name && item.brand_name !== item.prescribed_medicine_name && (
+                          <div className="disp-item-brand">Brand: {item.brand_name}</div>
+                        )}
                       </div>
-                      {reason && (
-                        <div className={`disp-medicine-warning ${reason.cls}`} style={{ display: 'inline-block', marginTop: 4 }}>
-                          {reason.text}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                        <AvailStatusBadge status={item.availability_status as any} />
+                        <span className="disp-item-qty">
+                          {item.dispensed_quantity != null ? `${item.dispensed_quantity}/` : ''}{item.required_quantity} {item.form ? item.form.toLowerCase() : 'unit'}s
+                        </span>
+                      </div>
                     </div>
-                    <div className="disp-medicine-badges">
-                      {matchSt && <MatchStatusBadge status={matchSt as any} />}
-                      <AvailStatusBadge status={item.availability_status as any} />
-                    </div>
+
+                    {/* Dosage & frequency */}
+                    {(item.dosage || item.frequency || item.duration) && (
+                      <div className="disp-item-instructions">
+                        {[item.dosage, item.frequency, item.duration].filter(Boolean).join(' · ')}
+                        {item.instructions ? ` — ${item.instructions}` : ''}
+                      </div>
+                    )}
+
+                    {/* Warning pill if ambiguous / unresolved */}
+                    {warn && (
+                      <div className={`disp-medicine-warning ${warn.cls}`}>
+                        {warn.text}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -186,7 +227,7 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
           )}
         </div>
 
-        {/* Workflow actions */}
+        {/* Actions bar */}
         <div className="disp-actions">
           {st === 'PENDING' && (
             <button className="disp-btn disp-btn--primary" style={{ width: '100%' }} disabled={loading} onClick={onProcess}>
@@ -200,6 +241,46 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
           )}
           {(st === 'PROCESSING' || st === 'READY') && (
             <>
+              {/* 6-Digit Counter Pickup Code Verification Input */}
+              <div style={{
+                padding: '0.85rem',
+                background: 'rgba(2, 132, 199, 0.06)',
+                borderRadius: '0.65rem',
+                border: '1.5px solid rgba(2, 132, 199, 0.3)',
+                marginBottom: '0.65rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
+                  <KeyRound size={16} style={{ color: '#0284c7' }} />
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Patient 6-Digit Pickup Verification Code:
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="e.g. 482915"
+                  value={pickupCodeInput}
+                  onChange={(e) => setPickupCodeInput(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    width: '100%',
+                    letterSpacing: '0.3em',
+                    fontFamily: 'monospace',
+                    fontSize: '1.25rem',
+                    fontWeight: 800,
+                    textAlign: 'center',
+                    padding: '0.45rem',
+                    borderRadius: '0.45rem',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--surface-color)',
+                    color: '#0284c7',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.3rem', textAlign: 'center' }}>
+                  Ask the patient for the 6-digit verification code on their ticket.
+                </span>
+              </div>
+
               <textarea
                 className="disp-textarea"
                 placeholder="Pharmacist dispensing notes (optional)…"
@@ -210,9 +291,9 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
                 className="disp-btn disp-btn--primary"
                 style={{ width: '100%', background: 'var(--disp-ok-text)' }}
                 disabled={loading}
-                onClick={() => { onDispense(notes); setNotes(''); }}
+                onClick={handleConfirmDispense}
               >
-                {loading ? 'Dispensing…' : 'Confirm & Dispense'}
+                {loading ? 'Dispensing…' : 'Verify & Dispense'}
               </button>
             </>
           )}
@@ -241,10 +322,25 @@ export default function RequestDetailPanel({ detail, loading, onClose, onProcess
             <div style={{ fontSize: '0.8rem', color: 'var(--disp-text-muted)', textAlign: 'center' }}>
               {st === 'DISPENSED' ? `Dispensed ${fmtTime(detail.dispensed_at)}` : `Cancelled`}
               {detail.notes && <div style={{ marginTop: 4 }}>Notes: {detail.notes}</div>}
+              {st === 'DISPENSED' && (
+                <button
+                  type="button"
+                  className="disp-btn disp-btn--ghost disp-btn--sm"
+                  onClick={() => setShowPrintModal(true)}
+                  style={{ marginTop: '0.5rem', color: '#0284c7' }}
+                >
+                  <Printer size={13} /> Reprint Dosage Labels & Receipt
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Printable Dosage Labels & Receipt Modal */}
+      {showPrintModal && (
+        <DosageLabelsModal detail={detail} onClose={() => setShowPrintModal(false)} />
+      )}
     </div>
   );
 }
