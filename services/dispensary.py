@@ -2050,11 +2050,12 @@ def get_dispensary_queue(dispensary_id: int, status_filter: Optional[str] = None
                 FROM dispensary_request req
                 JOIN patient pt  ON pt.patient_id = req.patient_id
                 JOIN users   u   ON u.user_id      = pt.user_id
+                LEFT JOIN users verif_u ON verif_u.user_id = req.verified_by_user_id
                 LEFT JOIN dispensary_request_item item ON item.request_id = req.request_id
                 WHERE req.dispensary_id = %s
                 {where_extra}
                 GROUP BY req.request_id, req.prescription_id, req.patient_id,
-                         u.full_name, pt.patient_code, req.status, req.estimated_ready_at, req.pickup_code, req.notes, req.pharmacist_notes, req.reconsultation_reason, req.reconsultation_target, req.reconsultation_at, req.created_at
+                         u.full_name, pt.patient_code, req.status, req.estimated_ready_at, req.pickup_code, req.notes, req.pharmacist_notes, req.reconsultation_reason, req.reconsultation_target, req.reconsultation_at, req.verified_by_user_id, req.verified_at, req.verification_signature, req.verification_checklist, verif_u.full_name, req.created_at
                 ORDER BY req.created_at ASC
                 """,
                 params,
