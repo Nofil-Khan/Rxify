@@ -262,6 +262,7 @@ export interface PatientDispensaryRequest {
   estimated_ready_at: string | null;
   ready_at: string | null;
   dispensed_at: string | null;
+  pickup_code?: string | null;
   notes: string | null;
   created_at: string;
   items: DispensaryRequestItem[];
@@ -390,3 +391,215 @@ export function updateMedicationStatus(
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispensary Search & Nearby Stock Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DispensaryAvailabilityStatus =
+  | 'ALL_AVAILABLE'
+  | 'PARTIALLY_AVAILABLE'
+  | 'NONE_AVAILABLE'
+  | 'AVAILABILITY_UNKNOWN';
+
+export type MedicineStockStatus =
+  | 'AVAILABLE'
+  | 'UNAVAILABLE'
+  | 'UNKNOWN'
+  | 'AMBIGUOUS'
+  | 'UNRESOLVED'
+  | 'NOT_A_MEDICINE';
+
+export interface GenericSubstituteItem {
+  medicine_id: number;
+  generic_name: string;
+  brand_name?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  available_quantity: number;
+  unit?: string | null;
+  name: string;
+}
+
+export interface DispensaryMedicineAvailabilityItem {
+  prescription_medicine_id: number;
+  medicine_id?: number | null;
+  prescribed_name: string;
+  generic_name?: string | null;
+  brand_name?: string | null;
+  dosage?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  status: MedicineStockStatus;
+  available_quantity: number;
+  unit?: string | null;
+  message: string;
+  substitute?: GenericSubstituteItem | null;
+}
+
+export interface DispensaryAvailabilitySummary {
+  overall_status: DispensaryAvailabilityStatus;
+  available_count: number;
+  total_count: number;
+  unknown_count: number;
+  items: DispensaryMedicineAvailabilityItem[];
+}
+
+export interface DispensaryScoreBreakdown {
+  availability_score: number;
+  distance_score: number;
+  availability_weight: number;
+  distance_weight: number;
+  bonus_points: number;
+}
+
+export interface DispensaryRanking {
+  rank: number;
+  rank_score: number;
+  match_tier: 'EXCELLENT_MATCH' | 'GOOD_MATCH' | 'MODERATE_MATCH' | 'LOW_MATCH';
+  rank_badge?: string | null;
+  is_top_pick: boolean;
+  score_breakdown: DispensaryScoreBreakdown;
+}
+
+export interface NearbyDispensary {
+  dispensary_id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  location?: string | null;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  distance_km: number | null;
+  operating_hours: string;
+  avg_prep_minutes: number;
+  is_hospital_affiliated: boolean;
+  hospital_name?: string | null;
+  status: string;
+  availability?: DispensaryAvailabilitySummary;
+  ranking?: DispensaryRanking;
+}
+
+export interface NearbyDispensariesResponse {
+  search_center: {
+    latitude: number;
+    longitude: number;
+  };
+  radius_km: number;
+  total_found: number;
+  top_k_applied?: number | null;
+  prescription?: {
+    prescription_id: number;
+    diagnosis?: string | null;
+    issue_date?: string | null;
+    medications_count?: number;
+  } | null;
+  dispensaries: NearbyDispensary[];
+}
+
+export interface FulfillPrescriptionResponse {
+  request_id: number;
+  prescription_id: number;
+  dispensary_id: number;
+  dispensary_name: string;
+  dispensary_address: string;
+  status: string;
+  pickup_code?: string;
+  estimated_ready_at: string;
+  queue_position: number;
+  eta_minutes: number;
+  message: string;
+}
+
+/** GET /api/patient/dispensaries/nearby */
+export function fetchNearbyDispensaries(params: {
+  lat: number;
+  lng: number;
+  radiusKm?: number;
+  prescriptionId?: number | null;
+  topK?: number | null;
+}): Promise<NearbyDispensariesResponse> {
+  const q = new URLSearchParams();
+  q.append('lat', params.lat.toString());
+  q.append('lng', params.lng.toString());
+  if (params.radiusKm) q.append('radius_km', params.radiusKm.toString());
+  if (params.prescriptionId) q.append('prescription_id', params.prescriptionId.toString());
+  if (params.topK) q.append('top_k', params.topK.toString());
+
+  return req<NearbyDispensariesResponse>(`/api/patient/dispensaries/nearby?${q.toString()}`);
+}
+
+/** POST /api/patient/dispensary/fulfill */
+export function submitPrescriptionFulfillment(params: {
+  prescriptionId: number;
+  dispensaryId: number;
+  notes?: string;
+}): Promise<FulfillPrescriptionResponse> {
+  return req<FulfillPrescriptionResponse>('/api/patient/dispensary/fulfill', {
+    method: 'POST',
+    body: JSON.stringify({
+      prescription_id: params.prescriptionId,
+      dispensary_id: params.dispensaryId,
+      notes: params.notes,
+    }),
+  });
+}
+
+/** POST /api/patient/dispensary-requests/{requestId}/cancel */
+export function cancelDispensaryRequest(
+  requestId: number,
+  reason?: string
+): Promise<{ success: boolean; request_id: number; status: string; message: string }> {
+  return req<{ success: boolean; request_id: number; status: string; message: string }>(
+    `/api/patient/dispensary-requests/${requestId}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }
+  );
+}
+
+
+/* ─── 3D Spatial Floating-Window Timeline Prescriptions API ────────────────── */
+
+export interface TimelinePrescriptionMedication {
+  id?: number | string;
+  prescription_medicine_id: number;
+  name: string;
+  raw_name?: string | null;
+  match_status?: 'MATCHED' | 'AMBIGUOUS' | 'UNRESOLVED' | 'NOT_A_MEDICINE' | null;
+  patient_resolved?: boolean;
+  medicine_id?: number | null;
+  generic_name?: string | null;
+  brand_name?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  category?: string | null;
+  dosage?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  instructions?: string | null;
+  status_display: 'Taking' | 'Completed' | 'Needs confirmation' | 'Paused' | 'Not recorded';
+}
+
+export interface TimelinePrescriptionItem {
+  id: number;
+  prescription_code: string;
+  display_date: string;
+  issue_date?: string | null;
+  follow_up_date?: string | null;
+  visit_type?: string | null;
+  clinic_city?: string | null;
+  diagnosis?: string | null;
+  doctor_name: string;
+  doctor_specialty?: string | null;
+  clinic_name?: string | null;
+  doctor_notes?: string | null;
+  is_latest: boolean;
+  medications: TimelinePrescriptionMedication[];
+}
+
+/** GET /api/patient/timeline-prescriptions */
+export function fetchTimelinePrescriptions(): Promise<TimelinePrescriptionItem[]> {
+  return req<TimelinePrescriptionItem[]>('/api/patient/timeline-prescriptions');
+}

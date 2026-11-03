@@ -985,3 +985,156 @@ def update_patient_medication_status(
         "medication": dict(updated),
     }
 
+
+
+
+
+def get_patient_timeline_prescriptions(patient_user_id: int) -> List[Dict[str, Any]]:
+    """Return chronological timeline of prescriptions with formatted metadata and medications.
+
+    Used by the 3D spatial floating-window prescription timeline.
+    """
+    import re
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Resolve patient_id
+            cur.execute("SELECT patient_id FROM patient WHERE user_id = %s", (patient_user_id,))
+            p_row = cur.fetchone()
+            if not p_row:
+                return []
+            patient_id = p_row["patient_id"]
+
+            # 2. Query prescriptions that have medications, ordered chronologically
+            cur.execute(
+                """
+                SELECT
+                    rx.prescription_id AS id,
+                    rx.issue_date,
+                    rx.created_at,
+                    rx.diagnosis,
+                    rx.notes,
+                    ch.name AS clinic_name,
+                    u_doc.full_name AS doctor_user_name,
+                    d.specialization AS doctor_specialty
+                FROM prescription rx
+                LEFT JOIN clinic_hospital ch ON ch.clinic_id = rx.clinic_id
+                LEFT JOIN doctor d ON d.doctor_id = rx.doctor_id
+                LEFT JOIN users u_doc ON u_doc.user_id = d.user_id
+                WHERE rx.patient_id = %s
+                  AND EXISTS (
+                      SELECT 1 FROM prescription_medicine pm WHERE pm.prescription_id = rx.prescription_id
+                  )
+                ORDER BY COALESCE(rx.issue_date, rx.created_at) ASC, rx.prescription_id ASC
+                """,
+                (patient_id,),
+            )
+            rx_rows = cur.fetchall()
+            if not rx_rows:
+                return []
+
+            total = len(rx_rows)
+            result = []
+
+            for idx, r in enumerate(rx_rows):
+                rx_id = r["id"]
+                raw_date = r["issue_date"] or r["created_at"]
+                display_date = raw_date.strftime("%b %d, %Y") if raw_date else "Undated"
+
+                notes = r["notes"] or ""
+                doc_name = r["doctor_user_name"]
+                if not doc_name:
+                    m_doc = re.search(r"Doctor:\s*([^|\n]+)", notes)
+                    doc_name = m_doc.group(1).strip() if m_doc else "Attending Physician"
+                if doc_name and not doc_name.startswith("Dr.") and not doc_name.startswith("डॉ."):
+                    doc_name = f"Dr. {doc_name}"
+
+                clinic = r["clinic_name"]
+                if not clinic:
+                    m_cln = re.search(r"Clinic:\s*([^|\n]+)", notes)
+                    clinic = m_cln.group(1).strip() if m_cln else "Medical Clinic"
+
+                is_latest = (idx == total - 1)
+
+                cur.execute(
+                    """
+                    SELECT
+                        pm.prescription_medicine_id,
+                        pm.name AS raw_name,
+                        pm.match_status,
+                        COALESCE(pm.patient_resolved, FALSE) AS patient_resolved,
+                        pm.medicine_id,
+                        m.generic_name,
+                        m.brand_name,
+                        m.strength,
+                        m.form::TEXT,
+                        m.category,
+                        COALESCE(m.brand_name, m.generic_name, pm.name) AS name,
+                        pm.dosage,
+                        pm.frequency,
+                        pm.duration,
+                        pm.instructions,
+                        mc.status AS course_status,
+                        mc.confirmation_status AS course_confirmation
+                    FROM prescription_medicine pm
+                    LEFT JOIN medicine m ON m.medicine_id = pm.medicine_id
+                    LEFT JOIN medication_course_prescription mcp ON mcp.prescription_medicine_id = pm.prescription_medicine_id
+                    LEFT JOIN medication_course mc ON mc.course_id = mcp.course_id
+                    WHERE pm.prescription_id = %s
+                    ORDER BY pm.prescription_medicine_id ASC
+                    """,
+                    (rx_id,),
+                )
+                med_rows = cur.fetchall()
+
+                medications = []
+                for med in med_rows:
+                    c_status = med["course_status"]
+                    c_conf = med["course_confirmation"]
+
+                    if c_status == "ACTIVE" and c_conf == "CONFIRMED_TAKING":
+                        status_display = "Taking"
+                    elif c_status == "ACTIVE" and c_conf == "NEEDS_CONFIRMATION":
+                        status_display = "Needs confirmation"
+                    elif c_status == "ON_HOLD":
+                        status_display = "Paused"
+                    elif c_status in ("COMPLETED", "DISCONTINUED"):
+                        status_display = "Completed"
+                    else:
+                        status_display = "Taking" if is_latest else "Completed"
+
+                    medications.append({
+                        "prescription_medicine_id": med["prescription_medicine_id"],
+                        "name": med["name"],
+                        "raw_name": med["raw_name"],
+                        "match_status": med["match_status"],
+                        "patient_resolved": med["patient_resolved"],
+                        "medicine_id": med["medicine_id"],
+                        "generic_name": med["generic_name"],
+                        "brand_name": med["brand_name"],
+                        "strength": med["strength"],
+                        "form": med["form"],
+                        "category": med["category"],
+                        "dosage": med["dosage"],
+                        "frequency": med["frequency"],
+                        "duration": med["duration"],
+                        "instructions": med["instructions"],
+                        "status_display": status_display,
+                    })
+
+                result.append({
+                    "id": rx_id,
+                    "prescription_code": f"RX-{rx_id:04d}",
+                    "display_date": display_date,
+                    "issue_date": raw_date.isoformat() if raw_date else None,
+                    "diagnosis": r["diagnosis"],
+                    "doctor_name": doc_name,
+                    "doctor_specialty": r["doctor_specialty"],
+                    "clinic_name": clinic,
+                    "doctor_notes": notes,
+                    "is_latest": is_latest,
+                    "medications": medications,
+                })
+
+            return result
+

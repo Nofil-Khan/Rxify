@@ -12,7 +12,7 @@ import MyDoctor from './tabs/MyDoctor';
 import PatientMessagesTab from './tabs/MessagesTab';
 import UploadTab from './tabs/UploadTab';
 import DispensaryTab from './tabs/DispensaryTab';
-import MedicationTimelineTab from './tabs/MedicationTimelineTab';
+import MedicationTimeline from './tabs/MedicationTimeline';
 import { Package, GitBranch } from 'lucide-react';
 
 export type DashTab = 'overview' | 'prescriptions' | 'timeline' | 'dispensary' | 'doctor' | 'messages' | 'upload';
@@ -248,7 +248,7 @@ export default function PatientDashboard() {
         <div className="pd-content" role="region" aria-live="polite">
           {tab === 'overview'      && <Overview      onUploadClick={() => switchTab('upload')} onViewAllClick={() => switchTab('prescriptions')} onTimelineClick={() => switchTab('timeline')} />}
           {tab === 'prescriptions' && <MyPrescriptions />}
-          {tab === 'timeline'      && <MedicationTimelineTab />}
+          {tab === 'timeline'      && <MedicationTimeline />}
           {tab === 'dispensary'    && <DispensaryTab />}
           {tab === 'doctor'        && <MyDoctor />}
           {tab === 'messages'      && <PatientMessagesTab />}

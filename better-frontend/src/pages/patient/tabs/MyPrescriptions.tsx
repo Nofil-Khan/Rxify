@@ -156,7 +156,7 @@ function PrescriptionRow({ rx, onSelect }: { rx: Prescription; onSelect: (id: nu
 const detailCache = new Map<number, PrescriptionDetail>();
 
 /* ─── Full detail view ───────────────────────────────────────────────────── */
-function PrescriptionDetailView({ rxId, onBack }: { rxId: number; onBack: () => void }) {
+export function PrescriptionDetailView({ rxId, onBack }: { rxId: number; onBack: () => void }) {
   const [detail, setDetail]           = useState<PrescriptionDetail | null>(() => detailCache.get(rxId) ?? null);
   const [loading, setLoading]         = useState(!detailCache.has(rxId));
   const [err, setErr]                 = useState('');

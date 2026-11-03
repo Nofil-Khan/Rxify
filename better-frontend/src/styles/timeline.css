@@ -1,0 +1,584 @@
+/* =============================================================================
+   RXIFY — MEDICATION TIMELINE | Spatial Floating-Window Interface
+   Architecture:
+   - Shared 3D perspective frustum on .mt-stage (1050px, horizon at 38%)
+   - Surrounding ghost prescription panels arranged along a cylindrical arc
+   - Upper & lower center windows hinged at shared edge with natural dihedral tilt
+   - 3D floor dais platform with perspective-tilted concentric rings
+   - Ambient lighting: overhead softbox zenith, mid-field horizon, floor pool
+   ============================================================================= */
+@tailwind components;
+@tailwind utilities;
+
+/* ─── SCENE: The Spatial Room ────────────────────────────────────────────── */
+.mt-scene {
+  position: relative;
+  width: 100%;
+  min-height: 740px;
+
+  /* Rich multi-layered atmospheric lighting */
+  background:
+    radial-gradient(ellipse 115% 48% at 50% -4%, rgba(255, 255, 255, 0.95) 0%, rgba(228, 241, 255, 0.55) 40%, transparent 68%),
+    radial-gradient(ellipse 95% 42% at 50% 50%, rgba(222, 238, 255, 0.40) 0%, transparent 64%),
+    linear-gradient(180deg, #DCE9F8 0%, #CDDFF3 42%, #BAD2EF 100%);
+
+  /* overflow: clip clips 2D container boundaries without flattening 3D preserve-3d */
+  overflow: clip;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 1.5rem 1rem 2rem;
+  border-radius: 28px;
+  box-shadow:
+    0 24px 64px -20px rgba(15, 35, 75, 0.10),
+    0 1px 0 0 rgba(255, 255, 255, 0.90) inset;
+}
+
+/* Overhead soft-box zenith light */
+.mt-scene::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 30% at 50% -2%, rgba(255, 255, 255, 0.88) 0%, transparent 58%),
+    radial-gradient(ellipse 48% 24% at 16% 4%, rgba(215, 238, 255, 0.40) 0%, transparent 50%),
+    radial-gradient(ellipse 48% 24% at 84% 4%, rgba(215, 238, 255, 0.40) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Floor atmospheric recession darkening */
+.mt-scene::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(165, 205, 245, 0.15) 45%,
+    rgba(135, 180, 230, 0.30) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── STAGE: Shared 3D Frustum ───────────────────────────────────────────── */
+.mt-stage {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  /* Natural 1050px perspective frustum with eye-line at 38% height */
+  perspective: 1050px;
+  perspective-origin: 50% 38%;
+  transform-style: preserve-3d;
+
+  z-index: 1;
+}
+
+/* ─── CENTRE COLUMN: Two Connected Floating Windows ──────────────────────── */
+.mt-center {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 820px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+
+  transform-style: preserve-3d;
+  /* Centered forward position in the 3D space */
+  transform: translateZ(24px);
+  transform-origin: center center;
+}
+
+/* ─── UPPER WINDOW: Prescription Header & Clinical Context ───────────────── */
+.mt-window--upper {
+  transform-style: preserve-3d;
+  /* Tilts backward 5° anchored at the bottom edge.
+     Its top surface gently recedes into the ceiling spotlight. */
+  transform: rotateX(5deg) translateZ(2px);
+  transform-origin: center bottom;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mt-window--upper .mt-float-card {
+  box-shadow:
+    0 4px 8px -2px rgba(15, 35, 75, 0.05),
+    0 14px 32px -6px rgba(15, 35, 75, 0.11),
+    0 36px 68px -14px rgba(15, 35, 75, 0.08),
+    0 1px 0 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+/* ─── SPATIAL BRIDGE: Visual Connection Seam Between Windows ─────────────── */
+.mt-spatial-bridge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 14px;
+  margin: -2px 0;
+  z-index: 12;
+  transform-style: preserve-3d;
+  transform: translateZ(18px);
+  pointer-events: none;
+}
+
+.mt-bridge-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(147, 197, 253, 0.4) 30%,
+    rgba(37, 99, 235, 0.35) 70%,
+    transparent 100%
+  );
+}
+
+.mt-bridge-line--rev {
+  background: linear-gradient(
+    to left,
+    transparent 0%,
+    rgba(147, 197, 253, 0.4) 30%,
+    rgba(37, 99, 235, 0.35) 70%,
+    transparent 100%
+  );
+}
+
+.mt-bridge-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 6px rgba(15, 35, 75, 0.05);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #2563EB;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mt-bridge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 6px #3B82F6;
+  animation: pulse 2.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ─── LOWER WINDOW: Medications Tray & Tabs Console ──────────────────────── */
+.mt-window--lower {
+  transform-style: preserve-3d;
+  /* Tilts forward -4.5° anchored at top edge.
+     Forms an open-book dihedral (~9.5°) with the upper card.
+     Brings the medications and interactive tabs forward into view. */
+  transform: rotateX(-4.5deg) translateZ(24px);
+  transform-origin: center top;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── FLOATING CARD BASE ─────────────────────────────────────────────────── */
+.mt-float-card {
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 2px 5px -1px rgba(15, 35, 75, 0.06),
+    0 12px 30px -6px rgba(15, 35, 75, 0.11),
+    0 34px 72px -14px rgba(15, 35, 75, 0.08),
+    0 1px 0 0 rgba(255, 255, 255, 0.95) inset;
+  position: relative;
+}
+
+/* ─── LOWER WINDOW GLASS TRAY ────────────────────────────────────────────── */
+.mt-glass-tray {
+  background: rgba(242, 248, 255, 0.55);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 4px 14px -2px rgba(15, 35, 75, 0.06),
+    0 24px 54px -12px rgba(15, 35, 75, 0.13),
+    0 1.5px 0 0 rgba(255, 255, 255, 0.95) inset;
+  padding: 7px;
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  position: relative;
+}
+
+/* ─── GHOST SIDE PANELS: Cylindrical Amphitheater in 3D ─────────────────── */
+.mt-ghost {
+  position: absolute;
+  /* Positioned at top: 24px so it aligns with the upper window */
+  top: 24px;
+  left: 50%;
+  z-index: 5;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1),
+    opacity   0.45s cubic-bezier(0.2, 0.9, 0.3, 1),
+    filter    0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* ── LEFT NEAR: 450px left of centre, 26° curved backward ───────────────── */
+.mt-ghost--near-left {
+  transform:
+    translateX(-50%)
+    translateX(-450px)
+    rotateY(26deg)
+    translateZ(-35px)
+    scale(0.92);
+  transform-origin: right center;
+  opacity: 0.90;
+}
+
+.mt-ghost--near-left:hover {
+  transform:
+    translateX(-50%)
+    translateX(-445px)
+    rotateY(20deg)
+    translateZ(-10px)
+    scale(0.96);
+  opacity: 1;
+}
+
+/* ── LEFT FAR: 575px left of centre, 44° curved backward ────────────────── */
+.mt-ghost--far-left {
+  transform:
+    translateX(-50%)
+    translateX(-575px)
+    rotateY(44deg)
+    translateZ(-95px)
+    scale(0.80);
+  transform-origin: right center;
+  opacity: 0.55;
+  filter: blur(0.5px);
+}
+
+.mt-ghost--far-left:hover {
+  transform:
+    translateX(-50%)
+    translateX(-565px)
+    rotateY(36deg)
+    translateZ(-60px)
+    scale(0.85);
+  opacity: 0.85;
+  filter: blur(0px);
+}
+
+/* ── RIGHT NEAR: 450px right of centre, -26° curved backward ─────────────── */
+.mt-ghost--near-right {
+  transform:
+    translateX(-50%)
+    translateX(450px)
+    rotateY(-26deg)
+    translateZ(-35px)
+    scale(0.92);
+  transform-origin: left center;
+  opacity: 0.90;
+}
+
+.mt-ghost--near-right:hover {
+  transform:
+    translateX(-50%)
+    translateX(445px)
+    rotateY(-20deg)
+    translateZ(-10px)
+    scale(0.96);
+  opacity: 1;
+}
+
+/* ── RIGHT FAR: 575px right of centre, -44° curved backward ─────────────── */
+.mt-ghost--far-right {
+  transform:
+    translateX(-50%)
+    translateX(575px)
+    rotateY(-44deg)
+    translateZ(-95px)
+    scale(0.80);
+  transform-origin: left center;
+  opacity: 0.55;
+  filter: blur(0.5px);
+}
+
+.mt-ghost--far-right:hover {
+  transform:
+    translateX(-50%)
+    translateX(565px)
+    rotateY(-36deg)
+    translateZ(-60px)
+    scale(0.85);
+  opacity: 0.85;
+  filter: blur(0px);
+}
+
+/* Directional lighting sheen on ghost card faces */
+.mt-ghost .mt-float-card {
+  background: rgba(246, 251, 255, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.90);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.mt-ghost:hover .mt-float-card {
+  box-shadow:
+    0 14px 36px -6px rgba(15, 35, 75, 0.16),
+    0 0 0 1px rgba(37, 99, 235, 0.25);
+  border-color: rgba(191, 219, 254, 0.95);
+}
+
+.mt-ghost--near-left  .mt-float-card::after,
+.mt-ghost--far-left   .mt-float-card::after,
+.mt-ghost--near-right .mt-float-card::after,
+.mt-ghost--far-right  .mt-float-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Left panels: right edge (facing centre) is illuminated by the stage */
+.mt-ghost--near-left .mt-float-card::after {
+  background: linear-gradient(to left, rgba(255,255,255,0.28) 0%, rgba(15,35,75,0.03) 70%);
+}
+.mt-ghost--far-left .mt-float-card::after {
+  background: linear-gradient(to left, rgba(255,255,255,0.15) 0%, rgba(15,35,75,0.06) 80%);
+}
+
+/* Right panels: left edge (facing centre) is illuminated by the stage */
+.mt-ghost--near-right .mt-float-card::after {
+  background: linear-gradient(to right, rgba(255,255,255,0.28) 0%, rgba(15,35,75,0.03) 70%);
+}
+.mt-ghost--far-right .mt-float-card::after {
+  background: linear-gradient(to right, rgba(255,255,255,0.15) 0%, rgba(15,35,75,0.06) 80%);
+}
+
+/* ─── CAROUSEL NAVIGATION BUTTONS ────────────────────────────────────────── */
+.mt-nav-btn {
+  position: absolute;
+  /* Placed at the spatial bridge seam (top: 252px) to float cleanly between cards */
+  top: 252px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 4px 16px rgba(15, 35, 75, 0.12),
+    0 1px 3px rgba(15, 35, 75, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  cursor: pointer;
+  z-index: 25;
+  transform-style: preserve-3d;
+  transform: translateZ(36px);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mt-nav-btn:hover:not(:disabled) {
+  transform: translateZ(44px) scale(1.10);
+  box-shadow:
+    0 8px 24px rgba(15, 35, 75, 0.18),
+    0 2px 5px rgba(15, 35, 75, 0.08);
+  color: #2563EB;
+  background: #ffffff;
+}
+
+.mt-nav-btn:active:not(:disabled) {
+  transform: translateZ(32px) scale(0.96);
+}
+
+.mt-nav-btn:disabled {
+  opacity: 0.30;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Positioned just outside the 820px center column */
+.mt-nav-btn--left  { left:  calc(50% - 445px); }
+.mt-nav-btn--right { right: calc(50% - 445px); }
+
+/* ─── 3D FLOOR DAIS & STAGE PLATFORM ─────────────────────────────────────── */
+.mt-floor-dais {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  width: 1240px;
+  height: 440px;
+  transform: translateX(-50%) rotateX(72deg) translateZ(-50px);
+  transform-origin: center center;
+  border-radius: 50%;
+
+  /* Concentric light rings receding in true 3D perspective */
+  background:
+    radial-gradient(ellipse 55% 55% at 50% 50%, rgba(255, 255, 255, 0.85) 0%, rgba(190, 222, 255, 0.32) 40%, transparent 68%),
+    radial-gradient(ellipse 85% 85% at 50% 50%, transparent 52%, rgba(147, 197, 253, 0.18) 60%, transparent 72%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 72%, rgba(186, 220, 255, 0.12) 80%, transparent 92%);
+
+  border-top: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 -12px 50px rgba(160, 210, 255, 0.65),
+    0 -2px 14px rgba(255, 255, 255, 0.70),
+    inset 0 4px 28px rgba(255, 255, 255, 0.70);
+
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── TIMELINE PROGRESS RAIL ─────────────────────────────────────────────── */
+.mt-timeline-track {
+  position: relative;
+  z-index: 20;
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 4px 16px rgba(15, 35, 75, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  transform-style: preserve-3d;
+  transform: translateZ(30px);
+}
+
+.mt-track-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748B;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mt-track-pill:hover {
+  color: #1E293B;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.mt-track-pill--active {
+  color: #2563EB;
+  background: #FFFFFF;
+  border-color: rgba(191, 219, 254, 0.8);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  font-weight: 700;
+}
+
+.mt-track-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #CBD5E1;
+  transition: all 0.18s ease;
+}
+
+.mt-track-pill--active .mt-track-dot {
+  background: #2563EB;
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.6);
+}
+
+/* ─── RESPONSIVE BREAKPOINTS ─────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .mt-ghost--far-left,
+  .mt-ghost--far-right {
+    display: none;
+  }
+  .mt-ghost--near-left {
+    transform:
+      translateX(-50%)
+      translateX(-410px)
+      rotateY(22deg)
+      translateZ(-30px)
+      scale(0.88);
+    opacity: 0.75;
+  }
+  .mt-ghost--near-right {
+    transform:
+      translateX(-50%)
+      translateX(410px)
+      rotateY(-22deg)
+      translateZ(-30px)
+      scale(0.88);
+    opacity: 0.75;
+  }
+  .mt-nav-btn--left  { left:  calc(50% - 410px); }
+  .mt-nav-btn--right { right: calc(50% - 410px); }
+}
+
+@media (max-width: 960px) {
+  .mt-ghost--near-left,
+  .mt-ghost--near-right,
+  .mt-ghost--far-left,
+  .mt-ghost--far-right {
+    display: none;
+  }
+  .mt-nav-btn--left  { left:  12px; }
+  .mt-nav-btn--right { right: 12px; }
+  .mt-center {
+    max-width: 100%;
+    transform: none;
+  }
+  .mt-window--upper,
+  .mt-window--lower {
+    transform: none;
+  }
+  .mt-timeline-track {
+    overflow-x: auto;
+    max-width: 95%;
+  }
+}
+
+@media (max-width: 640px) {
+  .mt-scene {
+    padding: 1.25rem 0.5rem 1.5rem;
+    border-radius: 18px;
+    min-height: auto;
+  }
+  .mt-glass-tray {
+    flex-direction: column;
+    padding: 6px;
+  }
+  .mt-nav-btn {
+    display: none;
+  }
+}

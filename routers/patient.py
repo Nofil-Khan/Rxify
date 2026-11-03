@@ -393,3 +393,90 @@ def update_medication_status(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+
+
+@router.get("/timeline-prescriptions")
+def get_timeline_prescriptions(
+    current_user: dict = Depends(require_role("patient")),
+):
+    """Retrieve chronologically ordered prescriptions with structured medications
+    for the 3D spatial floating-window prescription timeline.
+
+    **Access:** Patient only.
+    """
+    return patient_service.get_patient_timeline_prescriptions(patient_user_id=current_user["id"])
+
+
+# =============================================================================
+# Dispensary Discovery, Geospatial Search, and Patient Fulfillment Routing
+# =============================================================================
+
+from pydantic import BaseModel
+
+
+class FulfillPrescriptionBody(BaseModel):
+    prescription_id: int
+    dispensary_id: int
+    notes: Optional[str] = None
+
+
+class CancelDispensaryRequestBody(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.get("/dispensaries/nearby")
+def get_nearby_dispensaries(
+    lat: float = Query(..., description="Patient current or searched latitude"),
+    lng: float = Query(..., description="Patient current or searched longitude"),
+    radius_km: float = Query(25.0, description="Search radius in kilometers"),
+    prescription_id: Optional[int] = Query(None, description="Prescription ID to check stock for"),
+    top_k: Optional[int] = Query(None, description="Limit to top K ranked dispensaries"),
+    current_user: dict = Depends(require_role("patient")),
+):
+    from services import dispensary_search
+    return dispensary_search.find_nearby_dispensaries(
+        latitude=lat,
+        longitude=lng,
+        radius_km=radius_km,
+        prescription_id=prescription_id,
+        patient_user_id=current_user["id"],
+        top_k=top_k,
+    )
+
+
+@router.post("/dispensary/fulfill")
+def fulfill_prescription_route(
+    body: FulfillPrescriptionBody,
+    current_user: dict = Depends(require_role("patient")),
+):
+    from services import dispensary_search
+    try:
+        return dispensary_search.route_prescription_fulfillment(
+            prescription_id=body.prescription_id,
+            dispensary_id=body.dispensary_id,
+            patient_user_id=current_user["id"],
+            notes=body.notes,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/dispensary-requests/{request_id}/cancel")
+def cancel_dispensary_request_route(
+    request_id: int,
+    body: Optional[CancelDispensaryRequestBody] = None,
+    current_user: dict = Depends(require_role("patient")),
+):
+    from services import dispensary_search
+    try:
+        return dispensary_search.cancel_patient_request(
+            request_id=request_id,
+            patient_user_id=current_user["id"],
+            reason=body.reason if body else None,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
