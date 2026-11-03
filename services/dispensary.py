@@ -709,118 +709,6 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
             return get_request_detail(dispensary_id, request_id)
 
 
-# =============================================================================
-# 4. Request Processing, Reservation & Dispensing Workflow
-# =============================================================================
-
-def process_request(dispensary_id: int, request_id: int) -> Dict[str, Any]:
-    """Lock inventory and reserve available stock for this request.
-
-    Status transitions: PENDING / PARTIALLY_AVAILABLE -> PROCESSING
-    """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # 1. Fetch request with FOR UPDATE lock
-            cur.execute(
-                """
-                SELECT req.request_id, req.patient_id, req.status, p.user_id AS patient_user_id
-                FROM dispensary_request req
-                JOIN patient p ON p.patient_id = req.patient_id
-                WHERE req.request_id = %s AND req.dispensary_id = %s
-                FOR UPDATE
-                """,
-                (request_id, dispensary_id),
-            )
-            req = cur.fetchone()
-            if not req:
-                raise ValueError(f"Request #{request_id} not found for this dispensary.")
-
-            if req["status"] in ("DISPENSED", "CANCELLED"):
-                raise ValueError(f"Cannot process request in status '{req['status']}'.")
-
-            # 2. Fetch items for request
-            cur.execute(
-                """
-                SELECT item_id, medicine_id, required_quantity, reserved, availability_status
-                FROM dispensary_request_item
-                WHERE request_id = %s
-                """,
-                (request_id,),
-            )
-            items = cur.fetchall()
-
-            for item in items:
-                med_id = item["medicine_id"]
-                req_qty = item["required_quantity"]
-
-                if med_id and not item["reserved"]:
-                    # Lock inventory row
-                    cur.execute(
-                        """
-                        SELECT inventory_id, available_quantity, reserved_quantity,
-                               (available_quantity - reserved_quantity) AS free_stock
-                        FROM inventory_dispensary_stock
-                        WHERE dispensary_id = %s AND medicine_id = %s
-                        FOR UPDATE
-                        """,
-                        (dispensary_id, med_id),
-                    )
-                    inv = cur.fetchone()
-                    if inv and (inv["free_stock"] or 0) >= req_qty:
-                        # Reserve quantity
-                        cur.execute(
-                            """
-                            UPDATE inventory_dispensary_stock
-                            SET reserved_quantity = reserved_quantity + %s,
-                                updated_at = NOW()
-                            WHERE inventory_id = %s
-                            """,
-                            (req_qty, inv["inventory_id"]),
-                        )
-                        # Mark item reserved
-                        cur.execute(
-                            """
-                            UPDATE dispensary_request_item
-                            SET reserved = TRUE, availability_status = 'AVAILABLE'
-                            WHERE item_id = %s
-                            """,
-                            (item["item_id"],),
-                        )
-                        # Transaction log
-                        cur.execute(
-                            """
-                            INSERT INTO inventory_transaction (
-                                inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
-                            ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, 'Reserved for prescription request')
-                            """,
-                            (inv["inventory_id"], dispensary_id, med_id, req_qty, request_id),
-                        )
-
-            # Update request status to PROCESSING
-            cur.execute(
-                """
-                UPDATE dispensary_request
-                SET status = 'PROCESSING', updated_at = NOW()
-                WHERE request_id = %s
-                """,
-                (request_id,),
-            )
-
-            # Notify patient
-            cur.execute(
-                """
-                INSERT INTO notification (user_id, title, message, type)
-                VALUES (%s, 'Medicines Being Prepared', 'Your prescription is currently being prepared at the dispensary.', 'MEDICINE')
-                """,
-                (req["patient_user_id"],),
-            )
-
-            conn.commit()
-            return get_request_detail(dispensary_id, request_id)
-
-
-
-
 def confirm_or_approve_request(
     dispensary_id: int,
     request_id: int,
@@ -1121,6 +1009,266 @@ def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
             return get_request_detail(dispensary_id, request_id)
 
 
+def confirm_or_approve_request(
+    dispensary_id: int,
+    request_id: int,
+    estimated_prep_minutes: Optional[int] = 15,
+    pharmacist_notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Approve and confirm prescription fulfillment ticket.
+
+    Reserves stock, records preparation time and confirmation notes, sets status to CONFIRMED.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot approve request in status '{req['status']}'.")
+
+            # 2. Reserve available items
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved, availability_status
+                FROM dispensary_request_item
+                WHERE request_id = %s
+                """,
+                (request_id,),
+            )
+            items = cur.fetchall()
+
+            for item in items:
+                med_id = item["medicine_id"]
+                req_qty = item["required_quantity"]
+
+                if med_id and not item["reserved"]:
+                    cur.execute(
+                        """
+                        SELECT inventory_id, available_quantity, reserved_quantity,
+                               (available_quantity - reserved_quantity) AS free_stock
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        FOR UPDATE
+                        """,
+                        (dispensary_id, med_id),
+                    )
+                    inv = cur.fetchone()
+                    if inv and (inv["free_stock"] or 0) >= req_qty:
+                        cur.execute(
+                            """
+                            UPDATE inventory_dispensary_stock
+                            SET reserved_quantity = reserved_quantity + %s,
+                                updated_at = NOW()
+                            WHERE inventory_id = %s
+                            """,
+                            (req_qty, inv["inventory_id"]),
+                        )
+                        cur.execute(
+                            """
+                            UPDATE dispensary_request_item
+                            SET reserved = TRUE, availability_status = 'AVAILABLE'
+                            WHERE item_id = %s
+                            """,
+                            (item["item_id"],),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO inventory_transaction (
+                                inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                            ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, 'Reserved upon ticket confirmation')
+                            """,
+                            (inv["inventory_id"], dispensary_id, med_id, req_qty, request_id),
+                        )
+
+            prep_mins = estimated_prep_minutes if (estimated_prep_minutes and estimated_prep_minutes > 0) else 15
+            est_time_expr = f"NOW() + INTERVAL '{prep_mins} minutes'"
+
+            # 3. Update request status to CONFIRMED
+            cur.execute(
+                f"""
+                UPDATE dispensary_request
+                SET status = 'CONFIRMED',
+                    estimated_ready_at = {est_time_expr},
+                    pharmacist_notes = COALESCE(%s, pharmacist_notes),
+                    reconsultation_reason = NULL,
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (pharmacist_notes, request_id),
+            )
+
+            # 4. Notify patient
+            notes_addon = f' Note from pharmacist: "{pharmacist_notes}"' if pharmacist_notes else ""
+            msg = (
+                f"Your prescription order #{req['prescription_id']} has been APPROVED & CONFIRMED by {req['disp_name']}! "
+                f"Estimated ready in ~{prep_mins} mins.{notes_addon}"
+            )
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Dispensary Order Confirmed', %s, 'MEDICINE')
+                """,
+                (req["patient_user_id"], msg),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+def request_reconsultation(
+    dispensary_id: int,
+    request_id: int,
+    reason: str,
+    pharmacist_notes: str,
+    target: str = "DOCTOR",
+    item_ids: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """Flag prescription ticket or specific medicines for doctor/patient reconsultation.
+
+    Releases any reserved inventory so stock is not tied up, transitions status to RECONSULTATION_NEEDED,
+    records the clinical advisory notes, and notifies the patient.
+    """
+    if not pharmacist_notes or not pharmacist_notes.strip():
+        raise ValueError("Clinical notes describing the reconsultation reasoning are required.")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot reconsult request in status '{req['status']}'.")
+
+            # 2. Release any reserved items for this request
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved
+                FROM dispensary_request_item
+                WHERE request_id = %s AND reserved = TRUE
+                """,
+                (request_id,),
+            )
+            reserved_items = cur.fetchall()
+            for r_item in reserved_items:
+                med_id = r_item["medicine_id"]
+                req_qty = r_item["required_quantity"]
+                if med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s),
+                            updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (req_qty, dispensary_id, med_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO inventory_transaction (
+                            inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                        )
+                        SELECT inventory_id, %s, %s, 'RESERVATION_CANCELLED', %s, %s, 'Released due to reconsultation'
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (dispensary_id, med_id, req_qty, request_id, dispensary_id, med_id),
+                    )
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reserved = FALSE
+                    WHERE item_id = %s
+                    """,
+                    (r_item["item_id"],),
+                )
+
+            # 3. If item_ids specified, flag those items
+            if item_ids:
+                for it_id in item_ids:
+                    cur.execute(
+                        """
+                        UPDATE dispensary_request_item
+                        SET reconsultation_needed = TRUE,
+                            reconsultation_notes = %s,
+                            availability_status = 'RECONSULTATION_NEEDED'
+                        WHERE item_id = %s AND request_id = %s
+                        """,
+                        (pharmacist_notes.strip(), it_id, request_id),
+                    )
+            else:
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reconsultation_needed = TRUE,
+                        reconsultation_notes = %s
+                    WHERE request_id = %s
+                    """,
+                    (pharmacist_notes.strip(), request_id),
+                )
+
+            # 4. Update request status to RECONSULTATION_NEEDED
+            clean_reason = reason.strip() if reason else "CLINICAL_RECONSULTATION"
+            clean_target = (target or "DOCTOR").strip().upper()
+            cur.execute(
+                """
+                UPDATE dispensary_request
+                SET status = 'RECONSULTATION_NEEDED',
+                    reconsultation_reason = %s,
+                    pharmacist_notes = %s,
+                    reconsultation_target = %s,
+                    reconsultation_at = NOW(),
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (clean_reason, pharmacist_notes.strip(), clean_target, request_id),
+            )
+
+            # 5. Notify patient
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Doctor Reconsultation Advised by Pharmacist', %s, 'MEDICINE')
+                """,
+                (
+                    req["patient_user_id"],
+                    f"Pharmacist at {req['disp_name']} advises doctor reconsultation for prescription #{req['prescription_id']}: {pharmacist_notes.strip()}",
+                ),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+
 def dispense_request(
     dispensary_id: int,
     request_id: int,
@@ -1265,6 +1413,266 @@ def dispense_request(
             return get_request_detail(dispensary_id, request_id)
 
 
+def confirm_or_approve_request(
+    dispensary_id: int,
+    request_id: int,
+    estimated_prep_minutes: Optional[int] = 15,
+    pharmacist_notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Approve and confirm prescription fulfillment ticket.
+
+    Reserves stock, records preparation time and confirmation notes, sets status to CONFIRMED.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot approve request in status '{req['status']}'.")
+
+            # 2. Reserve available items
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved, availability_status
+                FROM dispensary_request_item
+                WHERE request_id = %s
+                """,
+                (request_id,),
+            )
+            items = cur.fetchall()
+
+            for item in items:
+                med_id = item["medicine_id"]
+                req_qty = item["required_quantity"]
+
+                if med_id and not item["reserved"]:
+                    cur.execute(
+                        """
+                        SELECT inventory_id, available_quantity, reserved_quantity,
+                               (available_quantity - reserved_quantity) AS free_stock
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        FOR UPDATE
+                        """,
+                        (dispensary_id, med_id),
+                    )
+                    inv = cur.fetchone()
+                    if inv and (inv["free_stock"] or 0) >= req_qty:
+                        cur.execute(
+                            """
+                            UPDATE inventory_dispensary_stock
+                            SET reserved_quantity = reserved_quantity + %s,
+                                updated_at = NOW()
+                            WHERE inventory_id = %s
+                            """,
+                            (req_qty, inv["inventory_id"]),
+                        )
+                        cur.execute(
+                            """
+                            UPDATE dispensary_request_item
+                            SET reserved = TRUE, availability_status = 'AVAILABLE'
+                            WHERE item_id = %s
+                            """,
+                            (item["item_id"],),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO inventory_transaction (
+                                inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                            ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, 'Reserved upon ticket confirmation')
+                            """,
+                            (inv["inventory_id"], dispensary_id, med_id, req_qty, request_id),
+                        )
+
+            prep_mins = estimated_prep_minutes if (estimated_prep_minutes and estimated_prep_minutes > 0) else 15
+            est_time_expr = f"NOW() + INTERVAL '{prep_mins} minutes'"
+
+            # 3. Update request status to CONFIRMED
+            cur.execute(
+                f"""
+                UPDATE dispensary_request
+                SET status = 'CONFIRMED',
+                    estimated_ready_at = {est_time_expr},
+                    pharmacist_notes = COALESCE(%s, pharmacist_notes),
+                    reconsultation_reason = NULL,
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (pharmacist_notes, request_id),
+            )
+
+            # 4. Notify patient
+            notes_addon = f' Note from pharmacist: "{pharmacist_notes}"' if pharmacist_notes else ""
+            msg = (
+                f"Your prescription order #{req['prescription_id']} has been APPROVED & CONFIRMED by {req['disp_name']}! "
+                f"Estimated ready in ~{prep_mins} mins.{notes_addon}"
+            )
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Dispensary Order Confirmed', %s, 'MEDICINE')
+                """,
+                (req["patient_user_id"], msg),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+def request_reconsultation(
+    dispensary_id: int,
+    request_id: int,
+    reason: str,
+    pharmacist_notes: str,
+    target: str = "DOCTOR",
+    item_ids: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """Flag prescription ticket or specific medicines for doctor/patient reconsultation.
+
+    Releases any reserved inventory so stock is not tied up, transitions status to RECONSULTATION_NEEDED,
+    records the clinical advisory notes, and notifies the patient.
+    """
+    if not pharmacist_notes or not pharmacist_notes.strip():
+        raise ValueError("Clinical notes describing the reconsultation reasoning are required.")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot reconsult request in status '{req['status']}'.")
+
+            # 2. Release any reserved items for this request
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved
+                FROM dispensary_request_item
+                WHERE request_id = %s AND reserved = TRUE
+                """,
+                (request_id,),
+            )
+            reserved_items = cur.fetchall()
+            for r_item in reserved_items:
+                med_id = r_item["medicine_id"]
+                req_qty = r_item["required_quantity"]
+                if med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s),
+                            updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (req_qty, dispensary_id, med_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO inventory_transaction (
+                            inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                        )
+                        SELECT inventory_id, %s, %s, 'RESERVATION_CANCELLED', %s, %s, 'Released due to reconsultation'
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (dispensary_id, med_id, req_qty, request_id, dispensary_id, med_id),
+                    )
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reserved = FALSE
+                    WHERE item_id = %s
+                    """,
+                    (r_item["item_id"],),
+                )
+
+            # 3. If item_ids specified, flag those items
+            if item_ids:
+                for it_id in item_ids:
+                    cur.execute(
+                        """
+                        UPDATE dispensary_request_item
+                        SET reconsultation_needed = TRUE,
+                            reconsultation_notes = %s,
+                            availability_status = 'RECONSULTATION_NEEDED'
+                        WHERE item_id = %s AND request_id = %s
+                        """,
+                        (pharmacist_notes.strip(), it_id, request_id),
+                    )
+            else:
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reconsultation_needed = TRUE,
+                        reconsultation_notes = %s
+                    WHERE request_id = %s
+                    """,
+                    (pharmacist_notes.strip(), request_id),
+                )
+
+            # 4. Update request status to RECONSULTATION_NEEDED
+            clean_reason = reason.strip() if reason else "CLINICAL_RECONSULTATION"
+            clean_target = (target or "DOCTOR").strip().upper()
+            cur.execute(
+                """
+                UPDATE dispensary_request
+                SET status = 'RECONSULTATION_NEEDED',
+                    reconsultation_reason = %s,
+                    pharmacist_notes = %s,
+                    reconsultation_target = %s,
+                    reconsultation_at = NOW(),
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (clean_reason, pharmacist_notes.strip(), clean_target, request_id),
+            )
+
+            # 5. Notify patient
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Doctor Reconsultation Advised by Pharmacist', %s, 'MEDICINE')
+                """,
+                (
+                    req["patient_user_id"],
+                    f"Pharmacist at {req['disp_name']} advises doctor reconsultation for prescription #{req['prescription_id']}: {pharmacist_notes.strip()}",
+                ),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+
 def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = None) -> Dict[str, Any]:
     """Cancel a dispensary request and release any reserved inventory."""
     with get_conn() as conn:
@@ -1342,6 +1750,266 @@ def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = N
             return get_request_detail(dispensary_id, request_id)
 
 
+def confirm_or_approve_request(
+    dispensary_id: int,
+    request_id: int,
+    estimated_prep_minutes: Optional[int] = 15,
+    pharmacist_notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Approve and confirm prescription fulfillment ticket.
+
+    Reserves stock, records preparation time and confirmation notes, sets status to CONFIRMED.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot approve request in status '{req['status']}'.")
+
+            # 2. Reserve available items
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved, availability_status
+                FROM dispensary_request_item
+                WHERE request_id = %s
+                """,
+                (request_id,),
+            )
+            items = cur.fetchall()
+
+            for item in items:
+                med_id = item["medicine_id"]
+                req_qty = item["required_quantity"]
+
+                if med_id and not item["reserved"]:
+                    cur.execute(
+                        """
+                        SELECT inventory_id, available_quantity, reserved_quantity,
+                               (available_quantity - reserved_quantity) AS free_stock
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        FOR UPDATE
+                        """,
+                        (dispensary_id, med_id),
+                    )
+                    inv = cur.fetchone()
+                    if inv and (inv["free_stock"] or 0) >= req_qty:
+                        cur.execute(
+                            """
+                            UPDATE inventory_dispensary_stock
+                            SET reserved_quantity = reserved_quantity + %s,
+                                updated_at = NOW()
+                            WHERE inventory_id = %s
+                            """,
+                            (req_qty, inv["inventory_id"]),
+                        )
+                        cur.execute(
+                            """
+                            UPDATE dispensary_request_item
+                            SET reserved = TRUE, availability_status = 'AVAILABLE'
+                            WHERE item_id = %s
+                            """,
+                            (item["item_id"],),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO inventory_transaction (
+                                inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                            ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, 'Reserved upon ticket confirmation')
+                            """,
+                            (inv["inventory_id"], dispensary_id, med_id, req_qty, request_id),
+                        )
+
+            prep_mins = estimated_prep_minutes if (estimated_prep_minutes and estimated_prep_minutes > 0) else 15
+            est_time_expr = f"NOW() + INTERVAL '{prep_mins} minutes'"
+
+            # 3. Update request status to CONFIRMED
+            cur.execute(
+                f"""
+                UPDATE dispensary_request
+                SET status = 'CONFIRMED',
+                    estimated_ready_at = {est_time_expr},
+                    pharmacist_notes = COALESCE(%s, pharmacist_notes),
+                    reconsultation_reason = NULL,
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (pharmacist_notes, request_id),
+            )
+
+            # 4. Notify patient
+            notes_addon = f' Note from pharmacist: "{pharmacist_notes}"' if pharmacist_notes else ""
+            msg = (
+                f"Your prescription order #{req['prescription_id']} has been APPROVED & CONFIRMED by {req['disp_name']}! "
+                f"Estimated ready in ~{prep_mins} mins.{notes_addon}"
+            )
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Dispensary Order Confirmed', %s, 'MEDICINE')
+                """,
+                (req["patient_user_id"], msg),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+def request_reconsultation(
+    dispensary_id: int,
+    request_id: int,
+    reason: str,
+    pharmacist_notes: str,
+    target: str = "DOCTOR",
+    item_ids: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """Flag prescription ticket or specific medicines for doctor/patient reconsultation.
+
+    Releases any reserved inventory so stock is not tied up, transitions status to RECONSULTATION_NEEDED,
+    records the clinical advisory notes, and notifies the patient.
+    """
+    if not pharmacist_notes or not pharmacist_notes.strip():
+        raise ValueError("Clinical notes describing the reconsultation reasoning are required.")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch request with lock
+            cur.execute(
+                """
+                SELECT req.request_id, req.prescription_id, req.patient_id, req.status,
+                       p.user_id AS patient_user_id, d.name AS disp_name
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                JOIN dispensary d ON d.dispensary_id = req.dispensary_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found for this dispensary.")
+
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot reconsult request in status '{req['status']}'.")
+
+            # 2. Release any reserved items for this request
+            cur.execute(
+                """
+                SELECT item_id, medicine_id, required_quantity, reserved
+                FROM dispensary_request_item
+                WHERE request_id = %s AND reserved = TRUE
+                """,
+                (request_id,),
+            )
+            reserved_items = cur.fetchall()
+            for r_item in reserved_items:
+                med_id = r_item["medicine_id"]
+                req_qty = r_item["required_quantity"]
+                if med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s),
+                            updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (req_qty, dispensary_id, med_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO inventory_transaction (
+                            inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                        )
+                        SELECT inventory_id, %s, %s, 'RESERVATION_CANCELLED', %s, %s, 'Released due to reconsultation'
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (dispensary_id, med_id, req_qty, request_id, dispensary_id, med_id),
+                    )
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reserved = FALSE
+                    WHERE item_id = %s
+                    """,
+                    (r_item["item_id"],),
+                )
+
+            # 3. If item_ids specified, flag those items
+            if item_ids:
+                for it_id in item_ids:
+                    cur.execute(
+                        """
+                        UPDATE dispensary_request_item
+                        SET reconsultation_needed = TRUE,
+                            reconsultation_notes = %s,
+                            availability_status = 'RECONSULTATION_NEEDED'
+                        WHERE item_id = %s AND request_id = %s
+                        """,
+                        (pharmacist_notes.strip(), it_id, request_id),
+                    )
+            else:
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET reconsultation_needed = TRUE,
+                        reconsultation_notes = %s
+                    WHERE request_id = %s
+                    """,
+                    (pharmacist_notes.strip(), request_id),
+                )
+
+            # 4. Update request status to RECONSULTATION_NEEDED
+            clean_reason = reason.strip() if reason else "CLINICAL_RECONSULTATION"
+            clean_target = (target or "DOCTOR").strip().upper()
+            cur.execute(
+                """
+                UPDATE dispensary_request
+                SET status = 'RECONSULTATION_NEEDED',
+                    reconsultation_reason = %s,
+                    pharmacist_notes = %s,
+                    reconsultation_target = %s,
+                    reconsultation_at = NOW(),
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (clean_reason, pharmacist_notes.strip(), clean_target, request_id),
+            )
+
+            # 5. Notify patient
+            cur.execute(
+                """
+                INSERT INTO notification (user_id, title, message, type)
+                VALUES (%s, 'Doctor Reconsultation Advised by Pharmacist', %s, 'MEDICINE')
+                """,
+                (
+                    req["patient_user_id"],
+                    f"Pharmacist at {req['disp_name']} advises doctor reconsultation for prescription #{req['prescription_id']}: {pharmacist_notes.strip()}",
+                ),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+
 # =============================================================================
 # 5. Queue & Detail Queries
 # =============================================================================
@@ -1372,6 +2040,11 @@ def get_dispensary_queue(dispensary_id: int, status_filter: Optional[str] = None
                     req.reconsultation_reason,
                     req.reconsultation_target,
                     req.reconsultation_at,
+                    req.verified_by_user_id,
+                    req.verified_at,
+                    req.verification_signature,
+                    req.verification_checklist,
+                    verif_u.full_name   AS verified_by_name,
                     req.created_at,
                     COUNT(item.item_id) AS total_items
                 FROM dispensary_request req
@@ -1433,6 +2106,11 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                     req.reconsultation_reason,
                     req.reconsultation_target,
                     req.reconsultation_at,
+                    req.verified_by_user_id,
+                    req.verified_at,
+                    req.verification_signature,
+                    req.verification_checklist,
+                    verif_u.full_name AS verified_by_name,
                     req.created_at,
                     COALESCE(
                         (
@@ -1455,12 +2133,18 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                                     'availability_status', item.availability_status,
                                     'reserved', item.reserved,
                                     'reconsultation_needed', COALESCE(item.reconsultation_needed, FALSE),
-                                    'reconsultation_notes', item.reconsultation_notes
+                                    'reconsultation_notes', item.reconsultation_notes,
+                                    'suggested_substitute_id', item.suggested_substitute_id,
+                                    'substitute_name', sub_m.generic_name,
+                                    'substitute_brand', sub_m.brand_name,
+                                    'substitute_strength', sub_m.strength,
+                                    'substitute_form', sub_m.form::TEXT
                                 ) ORDER BY item.item_id ASC
                             )
                             FROM dispensary_request_item item
                             JOIN prescription_medicine pm ON pm.prescription_medicine_id = item.prescription_medicine_id
                             LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
+                            LEFT JOIN medicine sub_m ON sub_m.medicine_id = item.suggested_substitute_id
                             WHERE item.request_id = req.request_id
                         ),
                         '[]'::json
@@ -1472,6 +2156,7 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                 JOIN prescription rx ON rx.prescription_id = req.prescription_id
                 LEFT JOIN doctor doc ON doc.doctor_id = rx.doctor_id
                 LEFT JOIN users doc_u ON doc_u.user_id = doc.user_id
+                LEFT JOIN users verif_u ON verif_u.user_id = req.verified_by_user_id
                 WHERE req.request_id = %s {disp_clause}
                 """,
                 params,
@@ -1481,7 +2166,7 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
                 return None
 
             request_detail = dict(row)
-            for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob", "reconsultation_at"):
+            for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob", "reconsultation_at", "verified_at"):
                 if request_detail.get(k):
                     request_detail[k] = str(request_detail[k])
 
@@ -1543,12 +2228,18 @@ def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
                                     'availability_status', item.availability_status,
                                     'reserved', item.reserved,
                                     'reconsultation_needed', COALESCE(item.reconsultation_needed, FALSE),
-                                    'reconsultation_notes', item.reconsultation_notes
+                                    'reconsultation_notes', item.reconsultation_notes,
+                                    'suggested_substitute_id', item.suggested_substitute_id,
+                                    'substitute_name', sub_m.generic_name,
+                                    'substitute_brand', sub_m.brand_name,
+                                    'substitute_strength', sub_m.strength,
+                                    'substitute_form', sub_m.form::TEXT
                                 ) ORDER BY item.item_id ASC
                             )
                             FROM dispensary_request_item item
                             JOIN prescription_medicine pm ON pm.prescription_medicine_id = item.prescription_medicine_id
                             LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
+                            LEFT JOIN medicine sub_m ON sub_m.medicine_id = item.suggested_substitute_id
                             WHERE item.request_id = req.request_id
                         ),
                         '[]'::json
@@ -1569,7 +2260,7 @@ def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
             results = []
             for r in rows:
                 item = dict(r)
-                for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob", "reconsultation_at"):
+                for k in ("estimated_ready_at", "ready_at", "dispensed_at", "created_at", "issue_date", "patient_dob", "reconsultation_at", "verified_at"):
                     if item.get(k):
                         item[k] = str(item[k])
                 results.append(item)
@@ -1653,4 +2344,392 @@ def get_inventory_alerts(dispensary_id: int) -> Dict[str, Any]:
             return {
                 "alerts": alerts,
                 "total_alerts": len(alerts),
+            }
+
+
+
+# =============================================================================
+# 7. Phase 1 Clinical Workflow: Per-Item Decisions, Verification & Audit Ledger
+# =============================================================================
+
+def update_request_item_decision(
+    dispensary_id: int,
+    request_id: int,
+    item_id: int,
+    decision: str,
+    quantity: Optional[int] = None,
+    substitute_medicine_id: Optional[int] = None,
+    notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Execute per-medicine fulfillment decision (FULFILL, PARTIAL, SUBSTITUTE, UNAVAILABLE, RECONSULT).
+
+    Adjusts inventory reservations and transactions, then recalibrates overall request status.
+    """
+    decision_clean = decision.strip().upper()
+    valid_decisions = ("FULFILL", "PARTIAL", "SUBSTITUTE", "UNAVAILABLE", "RECONSULT")
+    if decision_clean not in valid_decisions:
+        raise ValueError(f"Invalid decision '{decision}'. Must be one of {valid_decisions}")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Lock request and item
+            cur.execute(
+                """
+                SELECT req.request_id, req.dispensary_id, req.status, p.user_id AS patient_user_id
+                FROM dispensary_request req
+                JOIN patient p ON p.patient_id = req.patient_id
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                FOR UPDATE
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                raise ValueError(f"Request #{request_id} not found.")
+            if req["status"] in ("DISPENSED", "CANCELLED"):
+                raise ValueError(f"Cannot update item decisions for request in status '{req['status']}'.")
+
+            cur.execute(
+                """
+                SELECT item_id, prescription_medicine_id, medicine_id, required_quantity,
+                       dispensed_quantity, availability_status, reserved, suggested_substitute_id
+                FROM dispensary_request_item
+                WHERE item_id = %s AND request_id = %s
+                FOR UPDATE
+                """,
+                (item_id, request_id),
+            )
+            item = cur.fetchone()
+            if not item:
+                raise ValueError(f"Item #{item_id} not found for this request.")
+
+            med_id = item["medicine_id"]
+            req_qty = item["required_quantity"]
+
+            if decision_clean in ("FULFILL", "PARTIAL"):
+                target_qty = quantity if (quantity is not None and quantity > 0) else req_qty
+
+                # Check and reserve stock
+                if med_id:
+                    cur.execute(
+                        """
+                        SELECT inventory_id, (available_quantity - reserved_quantity) AS free_stock
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        FOR UPDATE
+                        """,
+                        (dispensary_id, med_id),
+                    )
+                    inv = cur.fetchone()
+                    free = (inv["free_stock"] or 0) if inv else 0
+
+                    # If not already reserved, reserve target_qty
+                    if not item["reserved"] and inv and free >= target_qty:
+                        cur.execute(
+                            """
+                            UPDATE inventory_dispensary_stock
+                            SET reserved_quantity = reserved_quantity + %s, updated_at = NOW()
+                            WHERE inventory_id = %s
+                            """,
+                            (target_qty, inv["inventory_id"]),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO inventory_transaction (
+                                inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                            ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, %s)
+                            """,
+                            (inv["inventory_id"], dispensary_id, med_id, target_qty, request_id, f"Item #{item_id} decision: {decision_clean}"),
+                        )
+
+                status_label = "AVAILABLE" if decision_clean == "FULFILL" else "PARTIAL"
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET availability_status = %s,
+                        dispensed_quantity = %s,
+                        reserved = TRUE,
+                        reconsultation_needed = FALSE,
+                        notes = COALESCE(%s, notes)
+                    WHERE item_id = %s
+                    """,
+                    (status_label, target_qty, notes, item_id),
+                )
+
+            elif decision_clean == "SUBSTITUTE":
+                if not substitute_medicine_id:
+                    raise ValueError("substitute_medicine_id is required when substituting an item.")
+
+                # Release previous reservation if existed
+                if item["reserved"] and med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s), updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (item["dispensed_quantity"] or req_qty, dispensary_id, med_id),
+                    )
+
+                sub_qty = quantity if (quantity is not None and quantity > 0) else req_qty
+                # Reserve substitute medicine
+                cur.execute(
+                    """
+                    SELECT inventory_id, (available_quantity - reserved_quantity) AS free_stock
+                    FROM inventory_dispensary_stock
+                    WHERE dispensary_id = %s AND medicine_id = %s
+                    FOR UPDATE
+                    """,
+                    (dispensary_id, substitute_medicine_id),
+                )
+                sub_inv = cur.fetchone()
+                if sub_inv and (sub_inv["free_stock"] or 0) >= sub_qty:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = reserved_quantity + %s, updated_at = NOW()
+                        WHERE inventory_id = %s
+                        """,
+                        (sub_qty, sub_inv["inventory_id"]),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO inventory_transaction (
+                            inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                        ) VALUES (%s, %s, %s, 'MEDICINE_RESERVED', %s, %s, %s)
+                        """,
+                        (sub_inv["inventory_id"], dispensary_id, substitute_medicine_id, sub_qty, request_id, f"Substituted for item #{item_id}"),
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET suggested_substitute_id = %s,
+                        dispensed_quantity = %s,
+                        availability_status = 'SUBSTITUTED',
+                        reserved = TRUE,
+                        reconsultation_needed = FALSE,
+                        notes = COALESCE(%s, 'Pharmacist proposed generic substitute')
+                    WHERE item_id = %s
+                    """,
+                    (substitute_medicine_id, sub_qty, notes, item_id),
+                )
+
+            elif decision_clean == "UNAVAILABLE":
+                # Release reservation if existed
+                if item["reserved"] and med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s), updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (item["dispensed_quantity"] or req_qty, dispensary_id, med_id),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO inventory_transaction (
+                            inventory_id, dispensary_id, medicine_id, txn_type, quantity, reference_id, notes
+                        )
+                        SELECT inventory_id, %s, %s, 'RESERVATION_CANCELLED', %s, %s, 'Item marked out of stock'
+                        FROM inventory_dispensary_stock
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (dispensary_id, med_id, item["dispensed_quantity"] or req_qty, request_id, dispensary_id, med_id),
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET availability_status = 'UNAVAILABLE',
+                        dispensed_quantity = 0,
+                        reserved = FALSE,
+                        notes = COALESCE(%s, notes)
+                    WHERE item_id = %s
+                    """,
+                    (notes, item_id),
+                )
+
+            elif decision_clean == "RECONSULT":
+                if item["reserved"] and med_id:
+                    cur.execute(
+                        """
+                        UPDATE inventory_dispensary_stock
+                        SET reserved_quantity = GREATEST(0, reserved_quantity - %s), updated_at = NOW()
+                        WHERE dispensary_id = %s AND medicine_id = %s
+                        """,
+                        (item["dispensed_quantity"] or req_qty, dispensary_id, med_id),
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET availability_status = 'RECONSULTATION_NEEDED',
+                        reconsultation_needed = TRUE,
+                        reconsultation_notes = COALESCE(%s, 'Doctor reconsultation advised'),
+                        reserved = FALSE
+                    WHERE item_id = %s
+                    """,
+                    (notes, item_id),
+                )
+
+            # 2. Recalibrate overall request status
+            cur.execute(
+                """
+                SELECT availability_status, reconsultation_needed
+                FROM dispensary_request_item
+                WHERE request_id = %s
+                """,
+                (request_id,),
+            )
+            all_items = cur.fetchall()
+            statuses = [it["availability_status"] for it in all_items]
+
+            if any(it["reconsultation_needed"] for it in all_items) and not any(s in ("AVAILABLE", "SUBSTITUTED") for s in statuses):
+                new_status = "RECONSULTATION_NEEDED"
+            elif all(s in ("AVAILABLE", "SUBSTITUTED", "DISPENSED") for s in statuses):
+                new_status = "CONFIRMED" if req["status"] in ("PENDING", "PARTIALLY_AVAILABLE", "UNAVAILABLE") else req["status"]
+            elif any(s in ("AVAILABLE", "SUBSTITUTED", "PARTIAL") for s in statuses):
+                new_status = "PARTIALLY_AVAILABLE"
+            else:
+                new_status = "UNAVAILABLE"
+
+            cur.execute(
+                "UPDATE dispensary_request SET status = %s, updated_at = NOW() WHERE request_id = %s",
+                (new_status, request_id),
+            )
+
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+def verify_prescription(
+    dispensary_id: int,
+    request_id: int,
+    user_id: int,
+    patient_checked: bool = True,
+    dosage_checked: bool = True,
+    interactions_checked: bool = True,
+    notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record clinical pharmacist prescription review and verification sign-off."""
+    import time
+    from datetime import datetime, timezone
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT req.request_id, req.dispensary_id, req.status, u.full_name AS pharmacist_name
+                FROM dispensary_request req
+                LEFT JOIN users u ON u.user_id = %s
+                WHERE req.request_id = %s AND req.dispensary_id = %s
+                """,
+                (user_id, request_id, dispensary_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Request not found for this dispensary.")
+
+            sig = f"RXF-V-{request_id}-{dispensary_id}-{int(time.time())}"
+            import json
+            checklist_dict = {
+                "patient_identity_checked": patient_checked,
+                "dosage_validity_checked": dosage_checked,
+                "interactions_cleared": interactions_checked,
+                "verified_by_user_id": user_id,
+                "pharmacist_name": row["pharmacist_name"] or "Staff Pharmacist",
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "notes": notes,
+            }
+
+            cur.execute(
+                """
+                UPDATE dispensary_request
+                SET verified_by_user_id = %s,
+                    verified_at = NOW(),
+                    verification_signature = %s,
+                    verification_checklist = %s::jsonb,
+                    updated_at = NOW()
+                WHERE request_id = %s
+                """,
+                (user_id, sig, json.dumps(checklist_dict), request_id),
+            )
+            conn.commit()
+            return get_request_detail(dispensary_id, request_id)
+
+
+def get_inventory_transactions(
+    dispensary_id: int,
+    medicine_id: Optional[int] = None,
+    txn_type: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    """Retrieve audit ledger of inventory movements (dispensed, reserved, added, cancelled)."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            where_clauses = ["t.dispensary_id = %s"]
+            params: list = [dispensary_id]
+
+            if medicine_id:
+                where_clauses.append("t.medicine_id = %s")
+                params.append(medicine_id)
+
+            if txn_type and txn_type.upper() != "ALL":
+                where_clauses.append("t.txn_type = %s")
+                params.append(txn_type.upper())
+
+            where_str = " AND ".join(where_clauses)
+
+            # Count
+            cur.execute(f"SELECT COUNT(*) AS total FROM inventory_transaction t WHERE {where_str}", params)
+            total = cur.fetchone()["total"]
+
+            # Rows
+            cur.execute(
+                f"""
+                SELECT
+                    t.txn_id,
+                    t.inventory_id,
+                    t.dispensary_id,
+                    t.medicine_id,
+                    m.generic_name,
+                    m.brand_name,
+                    m.strength,
+                    m.form::TEXT,
+                    t.txn_type,
+                    t.quantity,
+                    t.reference_id,
+                    t.notes,
+                    t.created_at,
+                    s.available_quantity,
+                    s.reserved_quantity,
+                    req.prescription_id,
+                    pt_u.full_name AS patient_name
+                FROM inventory_transaction t
+                JOIN medicine m ON m.medicine_id = t.medicine_id
+                LEFT JOIN inventory_dispensary_stock s ON s.inventory_id = t.inventory_id
+                LEFT JOIN dispensary_request req ON req.request_id = t.reference_id
+                LEFT JOIN patient pt ON pt.patient_id = req.patient_id
+                LEFT JOIN users pt_u ON pt_u.user_id = pt.user_id
+                WHERE {where_str}
+                ORDER BY t.created_at DESC, t.txn_id DESC
+                LIMIT %s OFFSET %s
+                """,
+                params + [limit, offset],
+            )
+            rows = cur.fetchall()
+            txns = []
+            for r in rows:
+                item = dict(r)
+                if item.get("created_at"):
+                    item["created_at"] = str(item["created_at"])
+                txns.append(item)
+
+            return {
+                "transactions": txns,
+                "total_count": total,
+                "limit": limit,
+                "offset": offset,
             }

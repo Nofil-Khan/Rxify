@@ -31,6 +31,8 @@ from models.dispensary import (
     ReconsultRequestBody,
     StockAddOrUpdateRequest,
     StockPartialUpdate,
+    UpdateRequestItemDecision,
+    VerifyPrescriptionBody,
 )
 from services import inventory_availability as availability_service
 from services import dispensary as dispensary_service
@@ -470,6 +472,84 @@ def reconsult_request(
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/requests/{request_id}/items/{item_id}")
+def update_item_decision(
+    request_id: int,
+    item_id: int,
+    body: UpdateRequestItemDecision,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Execute per-medicine fulfillment decision (FULFILL, PARTIAL, SUBSTITUTE, UNAVAILABLE, RECONSULT)."""
+    dispensary_id = current_dispensary["dispensary_id"]
+    try:
+        updated = dispensary_service.update_request_item_decision(
+            dispensary_id=dispensary_id,
+            request_id=request_id,
+            item_id=item_id,
+            decision=body.decision,
+            quantity=body.quantity,
+            substitute_medicine_id=body.substitute_medicine_id,
+            notes=body.notes,
+        )
+        return {
+            "message": f"Medicine decision '{body.decision}' applied successfully.",
+            "request": updated,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/requests/{request_id}/verify")
+def verify_prescription_route(
+    request_id: int,
+    body: Optional[VerifyPrescriptionBody] = None,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Sign-off on clinical prescription verification record by the dispensing pharmacist."""
+    dispensary_id = current_dispensary["dispensary_id"]
+    user_id = current_dispensary["id"]
+    p_chk = body.patient_identity_checked if body else True
+    d_chk = body.dosage_validity_checked if body else True
+    i_chk = body.interactions_cleared if body else True
+    notes = body.notes if body else None
+
+    try:
+        updated = dispensary_service.verify_prescription(
+            dispensary_id=dispensary_id,
+            request_id=request_id,
+            user_id=user_id,
+            patient_checked=p_chk,
+            dosage_checked=d_chk,
+            interactions_checked=i_chk,
+            notes=notes,
+        )
+        return {
+            "message": "Prescription clinically verified & signed off.",
+            "request": updated,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/transactions")
+def get_transactions_route(
+    medicine_id: Optional[int] = Query(None, description="Filter by medicine ID"),
+    txn_type: Optional[str] = Query(None, description="Filter by transaction type"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Retrieve audit ledger of inventory movements (dispensed, reserved, added, cancelled)."""
+    dispensary_id = current_dispensary["dispensary_id"]
+    return dispensary_service.get_inventory_transactions(
+        dispensary_id=dispensary_id,
+        medicine_id=medicine_id,
+        txn_type=txn_type,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/requests/{request_id}/process")

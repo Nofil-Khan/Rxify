@@ -109,3 +109,18 @@ class ReconsultRequestBody(BaseModel):
     target: Optional[str] = Field("DOCTOR", description="Target of reconsultation: DOCTOR or PATIENT")
     item_ids: Optional[List[int]] = Field(None, description="List of specific request item IDs needing reconsultation")
 
+
+class UpdateRequestItemDecision(BaseModel):
+    decision: str = Field(..., description="FULFILL | PARTIAL | SUBSTITUTE | UNAVAILABLE | RECONSULT")
+    quantity: Optional[int] = Field(None, ge=0, description="Quantity to dispense/reserve")
+    substitute_medicine_id: Optional[int] = Field(None, description="Dispensary stock medicine ID if substituting")
+    notes: Optional[str] = Field(None, description="Pharmacist item note or substitution reason")
+
+
+class VerifyPrescriptionBody(BaseModel):
+    patient_identity_checked: bool = Field(True, description="Patient identity and prescription code verified")
+    dosage_validity_checked: bool = Field(True, description="Dosages, frequencies, and durations clinically validated")
+    interactions_cleared: bool = Field(True, description="No critical drug interaction or allergy concerns")
+    notes: Optional[str] = Field(None, description="Pharmacist verification review notes")
+
+
