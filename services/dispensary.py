@@ -14,7 +14,6 @@ import psycopg2.extras
 
 from database.db import get_conn, get_password_hash, verify_password
 
-
 # =============================================================================
 # 1. Dispensary Entity CRUD & Authentication
 # =============================================================================
@@ -73,7 +72,6 @@ def create_dispensary(
                 row["created_at"] = str(row["created_at"])
             return row
 
-
 def authenticate_dispensary(email: str, password: str) -> Optional[Dict[str, Any]]:
     """Verify dispensary credentials. Returns dispensary dict on success, None on failure."""
     dispensary = get_dispensary_by_email(email)
@@ -82,7 +80,6 @@ def authenticate_dispensary(email: str, password: str) -> Optional[Dict[str, Any
     if not verify_password(password, dispensary["password_hash"]):
         return None
     return dispensary
-
 
 def get_dispensary_by_email(email: str) -> Optional[Dict[str, Any]]:
     """Fetch dispensary by email."""
@@ -100,7 +97,6 @@ def get_dispensary_by_email(email: str) -> Optional[Dict[str, Any]]:
             )
             row = cur.fetchone()
             return dict(row) if row else None
-
 
 def get_dispensary_by_id(dispensary_id: int) -> Optional[Dict[str, Any]]:
     """Fetch dispensary by internal ID."""
@@ -123,7 +119,6 @@ def get_dispensary_by_id(dispensary_id: int) -> Optional[Dict[str, Any]]:
                     res["created_at"] = str(res["created_at"])
                 return res
             return None
-
 
 def list_dispensaries_by_hospital(hospital_id: int) -> List[Dict[str, Any]]:
     """List all dispensaries owned by a hospital."""
@@ -148,7 +143,6 @@ def list_dispensaries_by_hospital(hospital_id: int) -> List[Dict[str, Any]]:
                     item["created_at"] = str(item["created_at"])
                 results.append(item)
             return results
-
 
 def update_dispensary_location(
     dispensary_id: int,
@@ -200,7 +194,6 @@ def update_dispensary_location(
                     res[k] = str(res[k])
             return res
 
-
 # =============================================================================
 # 2. Inventory Stock Control
 # =============================================================================
@@ -248,7 +241,6 @@ def get_inventory_stock(dispensary_id: int) -> List[Dict[str, Any]]:
                         item[k] = str(item[k])
                 results.append(item)
             return results
-
 
 def add_or_update_stock(
     dispensary_id: int,
@@ -298,8 +290,11 @@ def add_or_update_stock(
 
             if inv.get("updated_at"):
                 inv["updated_at"] = str(inv["updated_at"])
+            try:
+                sync_dispensary_active_requests(dispensary_id)
+            except Exception:
+                pass
             return inv
-
 
 def bulk_add_or_update_stock(
     dispensary_id: int,
@@ -380,7 +375,6 @@ def bulk_add_or_update_stock(
         "updated_count": updated_count,
     }
 
-
 def import_stock_from_csv(dispensary_id: int, csv_content: str) -> Dict[str, Any]:
     """Parse CSV content and bulk import inventory stock.
     
@@ -422,7 +416,6 @@ def import_stock_from_csv(dispensary_id: int, csv_content: str) -> Dict[str, Any
         raise ValueError("CSV contains no valid medicine stock rows or header missing.")
 
     return bulk_add_or_update_stock(dispensary_id, items_to_import)
-
 
 def update_stock_partial(
     dispensary_id: int,
@@ -488,7 +481,6 @@ def update_stock_partial(
                 if res.get(k):
                     res[k] = str(res[k])
             return res
-
 
 # =============================================================================
 # 3. Automatic Request Creation (Prescription → Dispensary Request)
@@ -708,7 +700,6 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
 def confirm_or_approve_request(
     dispensary_id: int,
     request_id: int,
@@ -828,7 +819,6 @@ def confirm_or_approve_request(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def request_reconsultation(
     dispensary_id: int,
@@ -966,7 +956,6 @@ def request_reconsultation(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
     """Mark request as READY for collection and notify patient."""
@@ -1008,7 +997,6 @@ def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
 def confirm_or_approve_request(
     dispensary_id: int,
     request_id: int,
@@ -1128,7 +1116,6 @@ def confirm_or_approve_request(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def request_reconsultation(
     dispensary_id: int,
@@ -1266,8 +1253,6 @@ def request_reconsultation(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
-
 
 def dispense_request(
     dispensary_id: int,
@@ -1412,7 +1397,6 @@ def dispense_request(
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
 def confirm_or_approve_request(
     dispensary_id: int,
     request_id: int,
@@ -1532,7 +1516,6 @@ def confirm_or_approve_request(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def request_reconsultation(
     dispensary_id: int,
@@ -1670,8 +1653,6 @@ def request_reconsultation(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
-
 
 def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = None) -> Dict[str, Any]:
     """Cancel a dispensary request and release any reserved inventory."""
@@ -1749,7 +1730,6 @@ def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = N
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
 def confirm_or_approve_request(
     dispensary_id: int,
     request_id: int,
@@ -1869,7 +1849,6 @@ def confirm_or_approve_request(
 
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def request_reconsultation(
     dispensary_id: int,
@@ -2008,8 +1987,6 @@ def request_reconsultation(
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
-
 # =============================================================================
 # 5. Queue & Detail Queries
 # =============================================================================
@@ -2070,9 +2047,158 @@ def get_dispensary_queue(dispensary_id: int, status_filter: Optional[str] = None
                 results.append(item)
             return results
 
+def sync_request_stock_availability(dispensary_id: int, request_id: int) -> None:
+    """Re-evaluate line items for an active dispensary request against real-time inventory stock.
+
+    Matches both:
+      1. Exact medicine_id stock.
+      2. Generic active substance equivalence (e.g. Radyle-D vs Razo-D, generic budesonide vs Buditone N).
+    Updates item availability_status, populates suggested_substitute_id, and recalibrates overall request status.
+    """
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Only sync non-final requests
+            cur.execute(
+                """
+                SELECT request_id, status FROM dispensary_request
+                WHERE request_id = %s AND dispensary_id = %s
+                  AND status NOT IN ('DISPENSED', 'CANCELLED')
+                """,
+                (request_id, dispensary_id),
+            )
+            req = cur.fetchone()
+            if not req:
+                return
+
+            cur.execute(
+                """
+                SELECT item.item_id, item.medicine_id, item.required_quantity,
+                       item.dispensed_quantity, item.availability_status,
+                       m.generic_name, m.brand_name, m.strength
+                FROM dispensary_request_item item
+                LEFT JOIN medicine m ON m.medicine_id = item.medicine_id
+                WHERE item.request_id = %s
+                """,
+                (request_id,),
+            )
+            items = cur.fetchall()
+            item_statuses = []
+
+            for it in items:
+                med_id = it["medicine_id"]
+                gen_name = it["generic_name"]
+                req_qty = it["required_quantity"] or 1
+                curr_status = it["availability_status"]
+
+                # If pharmacist manually made a fulfillment decision or flagged reconsultation, preserve it
+                if it.get("dispensed_quantity") is not None or curr_status in ("RECONSULTATION_NEEDED", "DECLINED", "SUBSTITUTED"):
+                    item_statuses.append(curr_status)
+                    continue
+
+                if not med_id:
+                    item_statuses.append("UNRESOLVED")
+                    continue
+
+                # 1. Check exact medicine_id stock
+                cur.execute(
+                    """
+                    SELECT inventory_id, medicine_id, (available_quantity - reserved_quantity) AS free_stock
+                    FROM inventory_dispensary_stock
+                    WHERE dispensary_id = %s AND medicine_id = %s
+                    """,
+                    (dispensary_id, med_id),
+                )
+                stock_row = cur.fetchone()
+
+                # 2. Check generic equivalence stock if exact brand is not in stock
+                alt_med_id = None
+                if (not stock_row or (stock_row["free_stock"] or 0) < req_qty) and gen_name:
+                    cur.execute(
+                        """
+                        SELECT s.inventory_id, s.medicine_id, m2.generic_name, m2.brand_name,
+                               (s.available_quantity - s.reserved_quantity) AS free_stock
+                        FROM inventory_dispensary_stock s
+                        JOIN medicine m2 ON m2.medicine_id = s.medicine_id
+                        WHERE s.dispensary_id = %s
+                          AND LOWER(m2.generic_name) = LOWER(%s)
+                          AND (s.available_quantity - s.reserved_quantity) > 0
+                        ORDER BY (s.available_quantity - s.reserved_quantity) DESC
+                        LIMIT 1
+                        """,
+                        (dispensary_id, gen_name),
+                    )
+                    alt_stock_row = cur.fetchone()
+                    if alt_stock_row and (alt_stock_row["free_stock"] or 0) > 0:
+                        stock_row = alt_stock_row
+                        alt_med_id = alt_stock_row["medicine_id"]
+
+                free_stock = (stock_row["free_stock"] if stock_row else 0) or 0
+
+                if free_stock >= req_qty:
+                    new_avail = "AVAILABLE"
+                elif free_stock > 0:
+                    new_avail = "PARTIAL"
+                else:
+                    new_avail = "UNAVAILABLE"
+
+                item_statuses.append(new_avail)
+
+                cur.execute(
+                    """
+                    UPDATE dispensary_request_item
+                    SET availability_status = %s,
+                        suggested_substitute_id = COALESCE(%s, suggested_substitute_id)
+                    WHERE item_id = %s
+                    """,
+                    (new_avail, alt_med_id, it["item_id"]),
+                )
+
+            # Recalibrate request status if still in discovery / initial stages
+            if req["status"] in ("PENDING", "PARTIALLY_AVAILABLE", "UNAVAILABLE"):
+                if item_statuses and all(s == "AVAILABLE" for s in item_statuses):
+                    new_req_status = "PENDING"
+                elif any(s in ("AVAILABLE", "PARTIAL") for s in item_statuses):
+                    new_req_status = "PARTIALLY_AVAILABLE"
+                else:
+                    new_req_status = "UNAVAILABLE"
+
+                cur.execute(
+                    """
+                    UPDATE dispensary_request
+                    SET status = %s, updated_at = NOW()
+                    WHERE request_id = %s
+                    """,
+                    (new_req_status, request_id),
+                )
+            conn.commit()
+
+def sync_dispensary_active_requests(dispensary_id: int) -> None:
+    """Sync all active, pending requests for a dispensary when stock is added or updated."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT request_id FROM dispensary_request
+                WHERE dispensary_id = %s
+                  AND status IN ('PENDING', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE')
+                """,
+                (dispensary_id,),
+            )
+            reqs = cur.fetchall()
+
+    for r in reqs:
+        try:
+            sync_request_stock_availability(dispensary_id, r["request_id"])
+        except Exception as exc:
+            logger.debug("Failed to sync request #%s on stock update: %s", r["request_id"], exc)
 
 def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optional[Dict[str, Any]]:
     """Return full request breakdown with prescription, patient, and item statuses."""
+    if dispensary_id:
+        try:
+            sync_request_stock_availability(dispensary_id, request_id)
+        except Exception:
+            pass
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             disp_clause = "AND req.dispensary_id = %s" if dispensary_id else ""
@@ -2173,7 +2299,6 @@ def get_request_detail(dispensary_id: Optional[int], request_id: int) -> Optiona
 
             return request_detail
 
-
 def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
     """Return all dispensary requests for a patient across all dispensaries."""
     with get_conn() as conn:
@@ -2267,7 +2392,6 @@ def get_patient_dispensary_requests(patient_id: int) -> List[Dict[str, Any]]:
                 results.append(item)
             return results
 
-
 # =============================================================================
 # 6. Dashboard & Inventory Alerts
 # =============================================================================
@@ -2317,7 +2441,6 @@ def get_dashboard_stats(dispensary_id: int) -> Dict[str, Any]:
                 "total_medicines":  stock_stats.get("total_medicines", 0),
             }
 
-
 def get_inventory_alerts(dispensary_id: int) -> Dict[str, Any]:
     """Return low-stock and out-of-stock items for alerts screen."""
     with get_conn() as conn:
@@ -2346,8 +2469,6 @@ def get_inventory_alerts(dispensary_id: int) -> Dict[str, Any]:
                 "alerts": alerts,
                 "total_alerts": len(alerts),
             }
-
-
 
 # =============================================================================
 # 7. Phase 1 Clinical Workflow: Per-Item Decisions, Verification & Audit Ledger
@@ -2603,7 +2724,6 @@ def update_request_item_decision(
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
 
-
 def verify_prescription(
     dispensary_id: int,
     request_id: int,
@@ -2658,7 +2778,6 @@ def verify_prescription(
             )
             conn.commit()
             return get_request_detail(dispensary_id, request_id)
-
 
 def get_inventory_transactions(
     dispensary_id: int,
