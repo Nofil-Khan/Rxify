@@ -98,6 +98,15 @@ export default function PatientDashboard() {
     setSideOpen(false);
   };
 
+  /* ── Cross-tab communication listener ── */
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.tab) switchTab(e.detail.tab);
+    };
+    window.addEventListener('rxify-switch-tab', handler);
+    return () => window.removeEventListener('rxify-switch-tab', handler);
+  }, []);
+
   const initials = (username ?? 'P').slice(0, 2).toUpperCase();
 
   return (

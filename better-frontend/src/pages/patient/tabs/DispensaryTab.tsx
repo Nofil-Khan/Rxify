@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  Building2, Clock, CheckCircle2, XCircle, AlertTriangle, Package, RefreshCw, QrCode, Sparkles, ShieldCheck, MapPin
+  Building2, Clock, CheckCircle2, XCircle, AlertTriangle, Package, RefreshCw,
+  QrCode, Sparkles, ShieldCheck, MapPin, Stethoscope, MessageSquare
 } from 'lucide-react';
 import {
   fetchMyDispensaryRequests, cancelDispensaryRequest, type PatientDispensaryRequest
@@ -20,10 +21,14 @@ function getStatusBadge(status: string) {
   switch (status) {
     case 'READY':
       return <span className="pd-badge pd-badge--emerald">READY FOR PICKUP</span>;
+    case 'CONFIRMED':
+      return <span className="pd-badge pd-badge--emerald" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669', borderColor: '#10b981' }}>CONFIRMED & PREPARING</span>;
     case 'PROCESSING':
       return <span className="pd-badge pd-badge--sky">BEING PREPARED</span>;
+    case 'RECONSULTATION_NEEDED':
+      return <span className="pd-badge pd-badge--rose" style={{ background: 'rgba(147, 51, 234, 0.15)', color: '#9333ea', borderColor: '#a855f7' }}>DOCTOR RECONSULTATION ADVISED</span>;
     case 'PENDING':
-      return <span className="pd-badge pd-badge--amber">RECEIVED / QUEUED</span>;
+      return <span className="pd-badge pd-badge--amber">AWAITING DISPENSARY CONFIRMATION</span>;
     case 'PARTIALLY_AVAILABLE':
       return <span className="pd-badge pd-badge--amber">PARTIAL AVAILABILITY</span>;
     case 'UNAVAILABLE':
@@ -95,6 +100,85 @@ function RequestCard({ req, onCancel, cancellingId }: RequestCardProps) {
         </div>
       </div>
 
+      {/* Reconsultation Advisory Alert Banner */}
+      {req.status === 'RECONSULTATION_NEEDED' && (
+        <div style={{
+          marginTop: '1rem',
+          padding: '1rem 1.15rem',
+          borderRadius: '0.75rem',
+          background: 'rgba(147, 51, 234, 0.08)',
+          border: '1.5px solid #a855f7',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            <Stethoscope size={20} style={{ color: '#9333ea' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#7e22ce' }}>
+              Pharmacist Advises Doctor Reconsultation
+            </span>
+          </div>
+          <p style={{ margin: '0 0 0.45rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            The pharmacist at <strong>{req.dispensary_name}</strong> reviewed this prescription and advises consulting your doctor before medicine collection.
+          </p>
+          {req.reconsultation_reason && (
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b21a8', marginBottom: '0.25rem' }}>
+              Reason: {req.reconsultation_reason.replace(/_/g, ' ')}
+            </div>
+          )}
+          {req.pharmacist_notes && (
+            <div style={{
+              padding: '0.55rem 0.85rem',
+              background: 'var(--surface-color)',
+              borderRadius: '0.5rem',
+              border: '1px solid rgba(147, 51, 234, 0.25)',
+              fontSize: '0.84rem',
+              color: 'var(--text-primary)',
+              marginTop: '0.35rem',
+            }}>
+              <strong>Pharmacist Clinical Advice:</strong> "{req.pharmacist_notes}"
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.85rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="pd-btn-sm"
+              style={{ background: '#9333ea', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
+              onClick={() => {
+                const event = new CustomEvent('rxify-switch-tab', { detail: { tab: 'messages' } });
+                window.dispatchEvent(event);
+              }}
+            >
+              <MessageSquare size={13} />
+              <span>Consult Prescribing Doctor</span>
+            </button>
+            {isCancellable && onCancel && (
+              <button
+                type="button"
+                className="pd-btn-sm"
+                style={{ background: 'var(--surface-color)', border: '1px solid #ef4444', color: '#ef4444', cursor: 'pointer' }}
+                onClick={() => onCancel(req.request_id)}
+                disabled={cancellingId === req.request_id}
+              >
+                Cancel & Choose Other Dispensary
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed Note Banner */}
+      {req.status === 'CONFIRMED' && req.pharmacist_notes && (
+        <div style={{
+          marginTop: '0.85rem',
+          padding: '0.65rem 0.95rem',
+          borderRadius: '0.6rem',
+          background: 'rgba(16, 185, 129, 0.08)',
+          border: '1px solid #10b981',
+          fontSize: '0.82rem',
+          color: '#047857',
+        }}>
+          <strong>Pharmacist Note:</strong> "{req.pharmacist_notes}"
+        </div>
+      )}
+
       {/* ETA Banner */}
       {isCancellable && (
         <div style={{
@@ -116,12 +200,16 @@ function RequestCard({ req, onCancel, cancellingId }: RequestCardProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <Clock size={18} style={{ color: req.status === 'READY' ? '#10b981' : '#0ea5e9' }} />
             <div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: req.status === 'READY' ? '#10b981' : '#0ea5e9' }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: req.status === 'READY' ? '#10b981' : req.status === 'CONFIRMED' ? '#059669' : '#0ea5e9' }}>
                 {req.status === 'READY'
                   ? 'Ready for Collection Now'
-                  : req.estimated_ready_at
-                    ? `Estimated Collection Time: ~${formatTime(req.estimated_ready_at)}`
-                    : 'Estimated Prep Time: ~15 mins'}
+                  : req.status === 'CONFIRMED'
+                    ? `Confirmed by Pharmacy · Est. Ready ~${formatTime(req.estimated_ready_at)}`
+                    : req.status === 'RECONSULTATION_NEEDED'
+                      ? 'Collection Paused · Doctor Reconsultation Advised'
+                      : req.estimated_ready_at
+                        ? `Estimated Collection Time: ~${formatTime(req.estimated_ready_at)}`
+                        : 'Awaiting Dispensary Confirmation'}
               </span>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
                 {req.dispensary_location ? `Collect from: ${req.dispensary_location}` : 'Show Patient Pickup Code at Counter'}

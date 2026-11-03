@@ -1,12 +1,14 @@
 /** Dispensary-specific status badges — request status, match status, stock status */
 
 type MatchStatus = 'MATCHED' | 'AMBIGUOUS' | 'UNRESOLVED' | 'NOT_A_MEDICINE' | null | undefined;
-type AvailStatus = 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'AMBIGUOUS' | 'UNRESOLVED' | 'NOT_A_MEDICINE' | null | undefined;
-type RequestStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED' | null | undefined;
+type AvailStatus = 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'AMBIGUOUS' | 'UNRESOLVED' | 'NOT_A_MEDICINE' | 'RECONSULTATION_NEEDED' | null | undefined;
+type RequestStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED' | 'RECONSULTATION_NEEDED' | null | undefined;
 type StockStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK' | null | undefined;
 
 const REQUEST_BADGE: Record<string, string> = {
   PENDING:             'disp-badge--pending',
+  CONFIRMED:           'disp-badge--ready',
+  RECONSULTATION_NEEDED:'disp-badge--ambiguous',
   PROCESSING:          'disp-badge--processing',
   READY:               'disp-badge--ready',
   DISPENSED:           'disp-badge--dispensed',
@@ -17,6 +19,8 @@ const REQUEST_BADGE: Record<string, string> = {
 
 const REQUEST_LABEL: Record<string, string> = {
   PENDING:             'Pending',
+  CONFIRMED:           'Confirmed',
+  RECONSULTATION_NEEDED:'Reconsultation Needed',
   PROCESSING:          'Processing',
   READY:               'Ready',
   DISPENSED:           'Dispensed',
@@ -41,6 +45,7 @@ const MATCH_LABEL: Record<string, string> = {
 
 const AVAIL_BADGE: Record<string, string> = {
   AVAILABLE:     'disp-badge--available',
+  RECONSULTATION_NEEDED:'disp-badge--ambiguous',
   PARTIAL:       'disp-badge--partial',
   UNAVAILABLE:   'disp-badge--unavailable',
   AMBIGUOUS:     'disp-badge--ambiguous',
@@ -50,6 +55,7 @@ const AVAIL_BADGE: Record<string, string> = {
 
 const AVAIL_LABEL: Record<string, string> = {
   AVAILABLE:     'Available',
+  RECONSULTATION_NEEDED:'Reconsult Needed',
   PARTIAL:       'Partial',
   UNAVAILABLE:   'Unavailable',
   AMBIGUOUS:     'Ambiguous',

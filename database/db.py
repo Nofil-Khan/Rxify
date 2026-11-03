@@ -260,7 +260,7 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_dispensary_lat_lng ON dispensary(latitude, longitude);")
 
         # 2. Add new ENUM values to dispensary_status (idempotent)
-        for val in ('PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'CANCELLED'):
+        for val in ('PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'CANCELLED', 'CONFIRMED', 'RECONSULTATION_NEEDED'):
             cur.execute(
                 f"""
                 DO $$ BEGIN
@@ -349,6 +349,10 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
             """
         )
         cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS pickup_code VARCHAR(6);")
+        cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS pharmacist_notes TEXT;")
+        cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS reconsultation_reason TEXT;")
+        cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS reconsultation_target VARCHAR(50);")
+        cur.execute("ALTER TABLE dispensary_request ADD COLUMN IF NOT EXISTS reconsultation_at TIMESTAMPTZ;")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_dispensary_id ON dispensary_request(dispensary_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_prescription_id ON dispensary_request(prescription_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_status ON dispensary_request(status);")
@@ -372,6 +376,9 @@ def _ensure_dispensary_schema(conn: PgConn) -> None:
             """
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_disp_req_item_request_id ON dispensary_request_item(request_id);")
+        cur.execute("ALTER TABLE dispensary_request_item ADD COLUMN IF NOT EXISTS reconsultation_needed BOOLEAN DEFAULT FALSE;")
+        cur.execute("ALTER TABLE dispensary_request_item ADD COLUMN IF NOT EXISTS reconsultation_notes TEXT;")
+        cur.execute("ALTER TABLE dispensary_request_item ADD COLUMN IF NOT EXISTS suggested_substitute_id INTEGER REFERENCES medicine(medicine_id);")
 
         # 7. Create inventory_transaction
         cur.execute(

@@ -94,3 +94,18 @@ class PrescriptionAvailabilityRequest(BaseModel):
         min_length=1,
         description="List of resolved medicines to check",
     )
+
+
+# ── Approval & Reconsultation Workflow ───────────────────────────────────────
+
+class ApproveRequestBody(BaseModel):
+    estimated_prep_minutes: Optional[int] = Field(15, ge=1, le=240, description="Estimated minutes to prepare order")
+    pharmacist_notes: Optional[str] = Field(None, description="Pharmacist confirmation message for the patient")
+
+
+class ReconsultRequestBody(BaseModel):
+    reason: str = Field(..., description="Reason for reconsultation (e.g. OUT_OF_STOCK_ALTERNATE_NEEDED, DOSAGE_CLARIFICATION)")
+    pharmacist_notes: str = Field(..., min_length=3, description="Detailed clinical advice and reasoning for the doctor/patient")
+    target: Optional[str] = Field("DOCTOR", description="Target of reconsultation: DOCTOR or PATIENT")
+    item_ids: Optional[List[int]] = Field(None, description="List of specific request item IDs needing reconsultation")
+

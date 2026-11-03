@@ -21,12 +21,14 @@ from core.security import create_access_token, require_dispensary, require_role
 from database.db import get_conn
 import psycopg2.extras
 from models.dispensary import (
+    ApproveRequestBody,
     AvailabilityMedicineInput,
     DispenseRequestBody,
     DispensaryLogin,
     DispensaryLocationUpdate,
     DispensaryRegister,
     PrescriptionAvailabilityRequest,
+    ReconsultRequestBody,
     StockAddOrUpdateRequest,
     StockPartialUpdate,
 )
@@ -411,6 +413,64 @@ def get_request_detail(
 # =============================================================================
 # 5. Status Workflow Actions (Process, Ready, Dispense, Cancel)
 # =============================================================================
+
+@router.post("/requests/{request_id}/approve")
+def approve_request(
+    request_id: int,
+    body: Optional[ApproveRequestBody] = None,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Approve and confirm prescription fulfillment ticket.
+
+    Sets status to CONFIRMED, records preparation time and confirmation notes, and reserves stock.
+    """
+    dispensary_id = current_dispensary["dispensary_id"]
+    prep_mins = body.estimated_prep_minutes if body else 15
+    notes = body.pharmacist_notes if body else None
+
+    try:
+        updated = dispensary_service.confirm_or_approve_request(
+            dispensary_id=dispensary_id,
+            request_id=request_id,
+            estimated_prep_minutes=prep_mins,
+            pharmacist_notes=notes,
+        )
+        return {
+            "message": "Prescription fulfillment ticket approved & confirmed.",
+            "request": updated,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/requests/{request_id}/reconsult")
+def reconsult_request(
+    request_id: int,
+    body: ReconsultRequestBody,
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Flag prescription ticket or specific medicines for doctor/patient reconsultation.
+
+    Releases any reserved inventory, records clinical advisory notes, sets status to RECONSULTATION_NEEDED,
+    and alerts the patient.
+    """
+    dispensary_id = current_dispensary["dispensary_id"]
+    try:
+        updated = dispensary_service.request_reconsultation(
+            dispensary_id=dispensary_id,
+            request_id=request_id,
+            reason=body.reason,
+            pharmacist_notes=body.pharmacist_notes,
+            target=body.target or "DOCTOR",
+            item_ids=body.item_ids,
+        )
+        return {
+            "message": "Reconsultation advisory recorded and patient notified.",
+            "request": updated,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 
 @router.post("/requests/{request_id}/process")
 def process_request(

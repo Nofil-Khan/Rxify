@@ -242,8 +242,10 @@ export interface DispensaryRequestItem {
   form: string | null;
   required_quantity: number;
   dispensed_quantity: number | null;
-  availability_status: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'DISPENSED' | 'CHECKING';
+  availability_status: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'DISPENSED' | 'CHECKING' | 'RECONSULTATION_NEEDED';
   reserved: boolean;
+  reconsultation_needed?: boolean;
+  reconsultation_notes?: string | null;
 }
 
 export interface PatientDispensaryRequest {
@@ -258,12 +260,16 @@ export interface PatientDispensaryRequest {
   doctor_name: string | null;
   doctor_specialty: string | null;
   diagnosis: string | null;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED' | 'RECONSULTATION_NEEDED';
   estimated_ready_at: string | null;
   ready_at: string | null;
   dispensed_at: string | null;
   pickup_code?: string | null;
   notes: string | null;
+  pharmacist_notes?: string | null;
+  reconsultation_reason?: string | null;
+  reconsultation_target?: string | null;
+  reconsultation_at?: string | null;
   created_at: string;
   items: DispensaryRequestItem[];
 }

@@ -13,6 +13,7 @@ import {
   fetchDispensaryProfile, fetchInventory, fetchDispensaryQueue,
   fetchDispensaryRequestDetail,
   processDispensaryRequest, markDispensaryRequestReady,
+  approveDispensaryRequest, reconsultDispensaryRequest,
   dispenseDispensaryRequest, cancelDispensaryRequest,
   fetchDispensaryDashboardStats, fetchDispensaryAlerts,
   uploadInventoryCsv, updateStockPartial,
@@ -42,7 +43,7 @@ function fmtRelTime(iso: string | null | undefined) {
 
 // ─── Queue Tab ────────────────────────────────────────────────────────────────
 
-const STATUS_FILTERS = ['ALL', 'PENDING', 'PROCESSING', 'READY', 'PARTIALLY_AVAILABLE', 'DISPENSED', 'UNAVAILABLE', 'CANCELLED'];
+const STATUS_FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'PROCESSING', 'READY', 'RECONSULTATION_NEEDED', 'PARTIALLY_AVAILABLE', 'DISPENSED', 'UNAVAILABLE', 'CANCELLED'];
 
 interface QueueTabProps {
   queue: QueueItemSummary[];
@@ -56,6 +57,8 @@ interface QueueTabProps {
   onSelectReq: (id: number) => void;
   onCloseDetail: () => void;
   onProcess: (id: number) => void;
+  onApprove: (id: number, prepMins?: number, notes?: string) => void;
+  onReconsult: (id: number, reason: string, notes: string, target?: string, itemIds?: number[]) => void;
   onMarkReady: (id: number) => void;
   onDispense: (id: number, notes: string, pickupCode?: string) => void;
   onCancel: (id: number) => void;
@@ -68,7 +71,7 @@ function QueueTab({
   queue, loading, error, statusFilter, onFilterChange,
   selectedReqId, selectedReqDetail, detailLoading,
   onSelectReq, onCloseDetail,
-  onProcess, onMarkReady, onDispense, onCancel,
+  onProcess, onApprove, onReconsult, onMarkReady, onDispense, onCancel,
   actionLoading, onScanOpen, toast,
 }: QueueTabProps) {
   return (
@@ -92,7 +95,7 @@ function QueueTab({
             className={`disp-filter-pill ${statusFilter === s ? 'disp-filter-pill--active' : ''}`}
             onClick={() => onFilterChange(s)}
           >
-            {s === 'ALL' ? 'All' : s === 'PARTIALLY_AVAILABLE' ? 'Partial' : s.charAt(0) + s.slice(1).toLowerCase()}
+            {s === 'ALL' ? 'All' : s === 'CONFIRMED' ? 'Confirmed' : s === 'RECONSULTATION_NEEDED' ? 'Reconsult' : s === 'PARTIALLY_AVAILABLE' ? 'Partial' : s.charAt(0) + s.slice(1).toLowerCase()}
           </button>
         ))}
       </div>
@@ -184,6 +187,8 @@ function QueueTab({
                 loading={actionLoading || (detailLoading && (!selectedReqDetail.items || selectedReqDetail.items.length === 0))}
                 onClose={onCloseDetail}
                 onProcess={() => onProcess(selectedReqDetail.request_id)}
+                onApprove={(prepMins, notes) => onApprove(selectedReqDetail.request_id, prepMins, notes)}
+                onReconsult={(reason, notes, target, itemIds) => onReconsult(selectedReqDetail.request_id, reason, notes, target, itemIds)}
                 onMarkReady={() => onMarkReady(selectedReqDetail.request_id)}
                 onDispense={(notes, pickupCode) => onDispense(selectedReqDetail.request_id, notes, pickupCode)}
                 onCancel={() => onCancel(selectedReqDetail.request_id)}
@@ -696,6 +701,30 @@ export default function DispensaryPortal() {
     loadTabData(true);
   });
 
+  const handleApprove = (id: number, prepMins?: number, notes?: string) => withAction(async () => {
+    const res = await approveDispensaryRequest(id, prepMins, notes);
+    toast('Prescription confirmed & stock reserved!', 'ok');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
+  const handleReconsult = (id: number, reason: string, notes: string, target?: string, itemIds?: number[]) => withAction(async () => {
+    const res = await reconsultDispensaryRequest(id, { reason, pharmacistNotes: notes, target, itemIds });
+    toast('Reconsultation advisory recorded. Patient alerted.', 'info');
+    if (res?.request) {
+      detailCacheRef.current.set(id, res.request);
+      setSelectedReqDetail(res.request);
+    } else {
+      await loadDetail(id);
+    }
+    loadTabData(true);
+  });
+
   const handleMarkReady = (id: number) => withAction(async () => {
     const res = await markDispensaryRequestReady(id);
     toast('Marked ready for collection.', 'ok');
@@ -907,6 +936,8 @@ export default function DispensaryPortal() {
             onSelectReq={handleSelectReq}
             onCloseDetail={() => { setSelectedReqId(null); setSelectedReqDetail(null); }}
             onProcess={handleProcess}
+            onApprove={handleApprove}
+            onReconsult={handleReconsult}
             onMarkReady={handleMarkReady}
             onDispense={handleDispense}
             onCancel={handleCancel}

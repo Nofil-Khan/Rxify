@@ -77,10 +77,14 @@ export interface QueueItemSummary {
   patient_id: number;
   patient_name: string;
   patient_code: string | null;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED' | 'RECONSULTATION_NEEDED';
   estimated_ready_at: string | null;
   pickup_code?: string | null;
   notes?: string | null;
+  pharmacist_notes?: string | null;
+  reconsultation_reason?: string | null;
+  reconsultation_target?: string | null;
+  reconsultation_at?: string | null;
   created_at: string;
   total_items: number;
 }
@@ -102,6 +106,8 @@ export interface RequestItemDetail {
   dispensed_quantity: number | null;
   availability_status: string;
   reserved: boolean;
+  reconsultation_needed?: boolean;
+  reconsultation_notes?: string | null;
 }
 
 export interface RequestDetail {
@@ -121,12 +127,16 @@ export interface RequestDetail {
   prescription_notes: string | null;
   doctor_name: string | null;
   doctor_specialty: string | null;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'PARTIALLY_AVAILABLE' | 'UNAVAILABLE' | 'DISPENSED' | 'CANCELLED' | 'RECONSULTATION_NEEDED';
   estimated_ready_at: string | null;
   ready_at: string | null;
   dispensed_at: string | null;
   pickup_code?: string | null;
   notes: string | null;
+  pharmacist_notes?: string | null;
+  reconsultation_reason?: string | null;
+  reconsultation_target?: string | null;
+  reconsultation_at?: string | null;
   created_at: string;
   items: RequestItemDetail[];
 }
@@ -249,6 +259,42 @@ export function fetchDispensaryRequestDetail(requestId: number): Promise<Request
 /** POST /api/dispensary/requests/:id/process */
 export function processDispensaryRequest(requestId: number): Promise<{ message: string; request: RequestDetail }> {
   return req(`/api/dispensary/requests/${requestId}/process`, { method: 'POST' });
+}
+
+/** POST /api/dispensary/requests/:id/approve */
+export function approveDispensaryRequest(
+  requestId: number,
+  estimatedPrepMinutes?: number,
+  pharmacistNotes?: string
+): Promise<{ message: string; request: RequestDetail }> {
+  return req(`/api/dispensary/requests/${requestId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({
+      estimated_prep_minutes: estimatedPrepMinutes,
+      pharmacist_notes: pharmacistNotes,
+    }),
+  });
+}
+
+/** POST /api/dispensary/requests/:id/reconsult */
+export function reconsultDispensaryRequest(
+  requestId: number,
+  data: {
+    reason: string;
+    pharmacistNotes: string;
+    target?: string;
+    itemIds?: number[];
+  }
+): Promise<{ message: string; request: RequestDetail }> {
+  return req(`/api/dispensary/requests/${requestId}/reconsult`, {
+    method: 'POST',
+    body: JSON.stringify({
+      reason: data.reason,
+      pharmacist_notes: data.pharmacistNotes,
+      target: data.target ?? 'DOCTOR',
+      item_ids: data.itemIds,
+    }),
+  });
 }
 
 /** POST /api/dispensary/requests/:id/ready */
