@@ -74,13 +74,15 @@ Peer-reviewed clinical research (including the landmark *Harvard Medical Practic
 | **Transcribing** | **11%** | `██████` | Paper slip transcription mistakes, unstandardized Latin shorthands |
 
 ```text
-Outpatient Medication Error Root Causes (% of Incidents):
+Primary Root Causes of Outpatient Medication Errors (Normalized to 100%):
 
-Illegible Doctor Handwriting   [42%]  █████████████████████
-Lack of Shared Patient History [36%]  ██████████████████
-Unchecked Drug-Drug Conflict   [28%]  ██████████████
-Dosing / Unit Calculation      [23%]  ████████████
-Look-Alike / Sound-Alike Brand [19%]  ██████████
+Illegible Doctor Handwriting    [38%]  ███████████████████
+Disconnected Patient Records    [26%]  █████████████
+Unchecked Drug Interactions     [18%]  █████████
+Dosing / Unit Miscalculation    [12%]  ██████
+Look-Alike / Sound-Alike Name   [ 6%]  ███
+                               ─────
+                        Total:  100%
 ```
 
 ---
