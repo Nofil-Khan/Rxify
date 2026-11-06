@@ -9,6 +9,7 @@ import {
   createRoute,
   createRootRoute,
 } from '@tanstack/react-router';
+import { BrowserRouter } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import PatientDashboard from './pages/patient/PatientDashboard';
@@ -16,11 +17,10 @@ import DoctorDashboard from './pages/doctor/DoctorDashboard';
 import HospitalAuth from './pages/hospital/HospitalAuth';
 import HospitalDashboard from './pages/hospital/HospitalDashboard';
 import DispensaryAuth from './pages/dispensary/DispensaryAuth';
-import DispensaryPortal from './pages/dispensary/DispensaryPortal';
+import Workspace from './pages/Workspace';
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ─── Landing Wrapper — scoped Lenis smooth scroll ─── */
 function LandingWithLenis() {
   const lenisRef = useRef<Lenis | null>(null);
 
@@ -48,12 +48,11 @@ function LandingWithLenis() {
   return <Landing />;
 }
 
-/* ─── Router Setup ─── */
 const rootRoute = createRootRoute({
   component: () => (
-    <>
+    <BrowserRouter>
       <Outlet />
-    </>
+    </BrowserRouter>
   ),
 });
 
@@ -69,7 +68,6 @@ const loginRoute = createRoute({
   component: Auth,
 });
 
-// Post-auth dashboards
 const patientRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patient',
@@ -109,7 +107,31 @@ const dispensaryRegisterRoute = createRoute({
 const dispensaryPortalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dispensary',
-  component: DispensaryPortal,
+  component: Workspace,
+});
+
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workspace',
+  component: Workspace,
+});
+
+const inventoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inventory',
+  component: Workspace,
+});
+
+const ordersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/orders',
+  component: Workspace,
+});
+
+const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics',
+  component: Workspace,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -122,6 +144,10 @@ const routeTree = rootRoute.addChildren([
   dispensaryLoginRoute,
   dispensaryRegisterRoute,
   dispensaryPortalRoute,
+  workspaceRoute,
+  inventoryRoute,
+  ordersRoute,
+  analyticsRoute,
 ]);
 
 const router = createRouter({ routeTree });

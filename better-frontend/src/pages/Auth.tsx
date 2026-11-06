@@ -17,14 +17,32 @@ function getRoleDashboard(role?: string | null) {
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { setAuth, isAuthenticated, role } = useAuthStore();
+  const { setAuth, isAuthenticated, role, clearAuth, displayName, username } = useAuthStore();
 
-  /* Redirect if already logged in */
+  /* Redirect if already logged in as patient or doctor */
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: getRoleDashboard(role) });
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('logout') === 'true') {
+        clearAuth();
+        localStorage.removeItem('rxify_token');
+        return;
+      }
+      if (params.get('switch') === 'true') {
+        return;
+      }
     }
-  }, [isAuthenticated, role, navigate]);
+    if (isAuthenticated) {
+      const normalized = role?.toLowerCase();
+      if (normalized === 'doctor') {
+        navigate({ to: '/doctor' });
+      } else if (normalized === 'patient') {
+        navigate({ to: '/patient' });
+      }
+      // Dispensary has its dedicated portal at /dispensary/login; visiting /login
+      // allows the user to sign in as Patient/Doctor or switch accounts.
+    }
+  }, [isAuthenticated, role, navigate, clearAuth]);
 
   const [tab, setTab] = useState<Tab>('login');
   const [showPass, setShowPass] = useState(false);
@@ -127,6 +145,62 @@ export default function Auth() {
 
       {/* Cross-Portal Switcher */}
       <PortalSwitcher current="main" />
+
+      {/* Active Dispensary Notice banner */}
+      {isAuthenticated && role?.toLowerCase() === 'dispensary' && (
+        <div
+          style={{
+            maxWidth: '460px',
+            width: '100%',
+            margin: '0 auto 1rem auto',
+            padding: '0.75rem 1rem',
+            borderRadius: '12px',
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(110, 231, 183, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.85rem',
+            color: '#e2e8f0',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div>
+            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>Active: </span>
+            <span>Dispensary ({displayName || username || 'Pharmacy'})</span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <a
+              href="/dispensary"
+              style={{
+                color: '#6ee7b7',
+                textDecoration: 'underline',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+              }}
+            >
+              Workspace
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                clearAuth();
+                localStorage.removeItem('rxify_token');
+              }}
+              style={{
+                color: '#f87171',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                textDecoration: 'underline',
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Card */}
       <div className="auth-card">

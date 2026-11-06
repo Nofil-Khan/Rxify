@@ -1,3 +1,4 @@
+import LandingNav from '../components/landing/LandingNav';
 import Chapter1Hero from '../components/landing/Chapter1Hero';
 import Chapter2Problem from '../components/landing/Chapter2Problem';
 import Chapter3Upload from '../components/landing/Chapter3Upload';
@@ -12,6 +13,7 @@ import ParticlesBackground from '../components/landing/ParticlesBackground';
 export default function Landing() {
   return (
     <div className="landing-wrapper">
+      <LandingNav />
       <ParticlesBackground />
       
       <Chapter1Hero />
