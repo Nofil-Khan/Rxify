@@ -32,7 +32,7 @@ export const VerifyPickupDialog: React.FC<VerifyPickupDialogProps> = ({
     if (open) setInputOtp(expectedOtp);
   }, [open, expectedOtp]);
 
-  const qrPayload = `${prescription.rxNumber}:${expectedOtp}:${prescription.patientName}`;
+  const qrPayload = `${prescription?.rxNumber || ''}:${expectedOtp}:${prescription?.patientName || ''}`;
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>

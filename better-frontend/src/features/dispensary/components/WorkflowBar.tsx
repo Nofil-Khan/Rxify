@@ -67,7 +67,7 @@ export const WorkflowBar: React.FC = () => {
           dispatch({ type: 'SUBSTITUTE_UNAVAILABLE', medicineId: medId, substituteName: subName })
         }
         onNotifyDoctor={() => {
-          const unavailable = state.prescription.medicines.find(
+          const unavailable = (state.prescription?.medicines || []).find(
             (m) => m.inStockQuantity === 0 || m.status === 'UNAVAILABLE'
           );
           if (unavailable) openReconsultModal(unavailable);

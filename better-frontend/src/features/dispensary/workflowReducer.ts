@@ -1,7 +1,8 @@
 import { WorkflowState, WorkflowAction, WorkflowStage } from './workflowTypes';
 import { WorkspacePrescription, PipelineStats } from './types';
 
-export function deriveStage(rx: WorkspacePrescription): WorkflowStage {
+export function deriveStage(rx?: WorkspacePrescription | null): WorkflowStage {
+  if (!rx) return 'NEW';
   if (rx.status === 'DISPENSED') return 'COMPLETED';
   if (rx.status === 'READY') return 'READY';
   if (rx.status === 'PROCESSING') return 'PREPARING';
@@ -16,13 +17,29 @@ export function getActiveStepIndex(stage: WorkflowStage): number {
 }
 
 export function createInitialWorkflowState(
-  prescription: WorkspacePrescription,
-  pipelineStats: PipelineStats
+  prescription?: WorkspacePrescription | null,
+  pipelineStats?: PipelineStats
 ): WorkflowState {
   const stage = deriveStage(prescription);
+  const fallbackRx: WorkspacePrescription = prescription || {
+    id: '',
+    rxNumber: '',
+    patientName: '',
+    patientInitials: '',
+    patientAge: 0,
+    patientGender: 'Male',
+    date: '',
+    doctorName: '',
+    doctorSpecialty: '',
+    diagnosis: '',
+    notes: '',
+    status: 'PENDING',
+    timeAgo: '',
+    medicines: [],
+  };
   return {
-    prescription,
-    pipelineStats,
+    prescription: fallbackRx,
+    pipelineStats: pipelineStats || { newCount: 0, preparingCount: 0, readyCount: 0, completedCount: 0 },
     stage,
     activeStepIndex: getActiveStepIndex(stage),
     isReserveGuardOpen: false,

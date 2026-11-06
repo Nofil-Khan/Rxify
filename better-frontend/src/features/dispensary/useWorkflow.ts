@@ -26,14 +26,15 @@ export function useWorkflow() {
   );
 
   React.useEffect(() => {
-    if (currentRx && currentRx.id !== state.prescription.id) {
+    if (currentRx && currentRx.id !== state.prescription?.id) {
       dispatch({ type: 'SET_PRESCRIPTION', prescription: currentRx });
     }
-  }, [currentRx, state.prescription.id]);
+  }, [currentRx, state.prescription?.id]);
 
   const stepMutation = useMutation({
     mutationFn: async (action: WorkflowAction) => {
-      const rxId = state.prescription.id;
+      const rxId = state.prescription?.id;
+      if (!rxId) return action;
       if (action.type === 'PROCESS_REQUEST') {
         await processRequestCommand(rxId);
       } else if (action.type === 'MARK_READY') {
@@ -60,7 +61,7 @@ export function useWorkflow() {
 
   const handleStepClick = React.useCallback(
     (stepIndex: number) => {
-      if (stepIndex !== state.activeStepIndex) return;
+      if (!state.prescription?.id || stepIndex !== state.activeStepIndex) return;
       switch (stepIndex) {
         case 0:
           stepMutation.mutate({ type: 'PROCESS_REQUEST' });

@@ -25,7 +25,7 @@ export const ReserveGuardDialog: React.FC<ReserveGuardDialogProps> = ({
   onSubstitute,
   onNotifyDoctor,
 }) => {
-  const unavailableMeds = prescription.medicines.filter(
+  const unavailableMeds = (prescription?.medicines || []).filter(
     (m) => m.inStockQuantity === 0 || m.status === 'UNAVAILABLE'
   );
 
