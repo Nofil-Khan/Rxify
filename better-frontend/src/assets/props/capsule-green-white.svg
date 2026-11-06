@@ -1,0 +1,31 @@
+<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="capGreen" x1="6" y1="8" x2="22" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="capWhite" x1="22" y1="20" x2="38" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="70%" stop-color="#E2E8F0" />
+      <stop offset="100%" stop-color="#CBD5E1" />
+    </linearGradient>
+    <filter id="capsuleShadow" x="0" y="0" width="44" height="44" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#04120D" flood-opacity="0.3" />
+    </filter>
+  </defs>
+  <g filter="url(#capsuleShadow)" transform="rotate(-45 22 22)">
+    <!-- Base Capsule Shadow & Hull -->
+    <rect x="14" y="6" width="16" height="32" rx="8" fill="#1F2A24" fill-opacity="0.1" />
+    <!-- Top Half: Emerald -->
+    <path d="M14 14C14 9.58172 17.5817 6 22 6C26.4183 6 30 9.58172 30 14V22H14V14Z" fill="url(#capGreen)" />
+    <!-- Bottom Half: White / Silver -->
+    <path d="M14 22H30V30C30 34.4183 26.4183 38 22 38C17.5817 38 14 34.4183 14 30V22Z" fill="url(#capWhite)" />
+    <!-- Center Dividing Band Line -->
+    <line x1="14" y1="22" x2="30" y2="22" stroke="#042F24" stroke-width="0.8" stroke-opacity="0.35" />
+    <!-- Glossy Highlight Streak -->
+    <path d="M17 10C17 8.5 19 7.5 22 7.5" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.75" />
+    <path d="M18 10V33" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.4" />
+  </g>
+</svg>
+

@@ -35,7 +35,7 @@ share/python-wheels/
 /lib64/
 !better-frontend/src/lib/
 !better-frontend/lib/
-MANIFEST
+MANIFESTation
 
 # ── Virtual Environments ──────────────────────────────────────────────────────
 .venv/

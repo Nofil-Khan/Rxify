@@ -3,14 +3,7 @@
    Clinical-cool healthcare storytelling UI
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-/* ─── RESET ───────────────────────────────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ─── RESET (Handled by Tailwind v4 Preflight) ─────────────────────────── */
 
 html {
   scroll-behavior: auto !important; /* Lenis handles scroll */

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 440" width="520" height="440" fill="none">
+  <defs>
+    <!-- Warm Ambient Rim & Ceramic Porcelain Shading -->
+    <radialGradient id="ceramicBody" cx="42%" cy="46%" r="62%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#F1F5F9" />
+      <stop offset="70%" stop-color="#CBD5E1" />
+      <stop offset="100%" stop-color="#64748B" />
+    </radialGradient>
+
+    <!-- Inner Herb Cavity Depth -->
+    <radialGradient id="innerCavity" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#064E3B" stop-opacity="0.85" />
+      <stop offset="65%" stop-color="#022C22" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#04120D" />
+    </radialGradient>
+
+    <!-- Pestle Ceramic Gradients -->
+    <linearGradient id="pestleShading" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="30%" stop-color="#F8FAFC" />
+      <stop offset="75%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+
+    <!-- Botanical Herb Leaves Inside -->
+    <linearGradient id="lushHerb" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A7F3D0" />
+      <stop offset="45%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#064E3B" />
+    </linearGradient>
+
+    <filter id="mortar3DShadow" x="-25%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="8" dy="28" stdDeviation="22" flood-color="#021E16" flood-opacity="0.8" />
+    </filter>
+  </defs>
+
+  <g filter="url(#mortar3DShadow)">
+    <!-- 3D Pestle Rod protruding to top-right -->
+    <g transform="rotate(-38 290 140)">
+      <!-- Pestle shadow onto rim -->
+      <path d="M 270 20 L 315 20 L 305 240 L 280 240 Z" fill="#021E16" opacity="0.35" />
+      <!-- Pestle main body shaft -->
+      <path d="M 275 10 C 275 -5, 310 -5, 310 10 L 302 245 C 302 258, 282 258, 282 245 Z" fill="url(#pestleShading)" />
+      <!-- Pestle rounded handle knob -->
+      <ellipse cx="292" cy="8" rx="19" ry="14" fill="#FFFFFF" />
+      <path d="M 285 25 C 285 15, 298 15, 298 25" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.75" />
+    </g>
+
+    <!-- Mortar Solid Ceramic Body with Wide Tapered Waist -->
+    <path
+      d="M 120 185
+         C 115 315, 175 365, 260 365
+         C 345 365, 405 315, 400 185
+         Z"
+      fill="url(#ceramicBody)"
+    />
+
+    <!-- Heavy Ceramic Pedestal Foot / Base Rim -->
+    <ellipse cx="260" cy="365" rx="85" ry="18" fill="#94A3B8" opacity="0.7" />
+    <ellipse cx="260" cy="362" rx="80" ry="15" fill="#E2E8F0" />
+
+    <!-- Exterior Porcelain Highlight Arc -->
+    <path
+      d="M 145 210 C 140 290, 185 340, 240 350"
+      stroke="#FFFFFF"
+      stroke-width="5"
+      stroke-linecap="round"
+      opacity="0.5"
+    />
+
+    <!-- Mortar Inner Well Hollow -->
+    <ellipse cx="260" cy="185" rx="140" ry="46" fill="#1E293B" opacity="0.3" />
+    <!-- Polished Ceramic Lip Ring -->
+    <ellipse cx="260" cy="183" rx="136" ry="42" fill="#F8FAFC" />
+    <ellipse cx="260" cy="185" rx="120" ry="34" fill="url(#innerCavity)" />
+
+    <!-- Fresh Botanical Foliage / Herbs spilling from bowl -->
+    <!-- Left Leaf -->
+    <path
+      d="M 200 185 C 150 145, 160 95, 205 110 C 220 145, 225 170, 200 185 Z"
+      fill="url(#lushHerb)"
+    />
+    <path d="M 185 140 C 200 135, 210 155, 210 170" stroke="#A7F3D0" stroke-width="1.5" stroke-linecap="round" opacity="0.6" />
+
+    <!-- Center/Right Mint Sprig -->
+    <path
+      d="M 230 180 C 225 115, 275 110, 260 155 C 255 175, 245 180, 230 180 Z"
+      fill="url(#lushHerb)"
+    />
+    <path
+      d="M 255 175 C 275 130, 315 140, 290 175 Z"
+      fill="#34D399"
+      opacity="0.9"
+    />
+  </g>
+</svg>

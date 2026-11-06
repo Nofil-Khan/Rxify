@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#04120D" />
+      <stop offset="50%" stop-color="#0A2A20" />
+      <stop offset="100%" stop-color="#0F3A2C" />
+    </linearGradient>
+    <filter id="shelfBlur" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="22" />
+    </filter>
+    <linearGradient id="shelfGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#061F17" stop-opacity="0.7" />
+      <stop offset="50%" stop-color="#144435" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#0B2E23" stop-opacity="0.8" />
+    </linearGradient>
+    <linearGradient id="amberJar" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FBBF24" stop-opacity="0.55" />
+      <stop offset="50%" stop-color="#D97706" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#78350F" stop-opacity="0.75" />
+    </linearGradient>
+    <linearGradient id="greenJar" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.5" />
+      <stop offset="60%" stop-color="#059669" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#064E3B" stop-opacity="0.75" />
+    </linearGradient>
+    <linearGradient id="warmBacklight" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#B45309" stop-opacity="0.04" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bgGrad)" />
+
+  <!-- Blurred Apothecary Shelves (Background) -->
+  <g filter="url(#shelfBlur)" opacity="0.85">
+    <!-- Warm Ambient Counter Backlight behind Jars -->
+    <ellipse cx="1600" cy="220" rx="380" ry="190" fill="url(#warmBacklight)" />
+    <ellipse cx="1550" cy="460" rx="420" ry="210" fill="url(#warmBacklight)" />
+
+    <!-- Top Shelf -->
+    <rect x="0" y="240" width="1920" height="24" fill="url(#shelfGrad)" />
+    <!-- Row 1 Jars -->
+    <rect x="1350" y="110" width="56" height="130" rx="10" fill="url(#amberJar)" />
+    <rect x="1430" y="80" width="70" height="160" rx="12" fill="url(#greenJar)" />
+    <rect x="1530" y="120" width="60" height="120" rx="8" fill="url(#amberJar)" />
+    <rect x="1620" y="90" width="80" height="150" rx="14" fill="url(#greenJar)" />
+    <rect x="1730" y="130" width="50" height="110" rx="6" fill="url(#amberJar)" />
+    <rect x="1800" y="100" width="70" height="140" rx="10" fill="url(#greenJar)" />
+
+    <!-- Middle Shelf -->
+    <rect x="0" y="520" width="1920" height="28" fill="url(#shelfGrad)" />
+    <!-- Row 2 Jars -->
+    <rect x="1300" y="360" width="75" height="160" rx="12" fill="url(#greenJar)" />
+    <rect x="1400" y="390" width="60" height="130" rx="10" fill="url(#amberJar)" />
+    <rect x="1490" y="340" width="90" height="180" rx="16" fill="url(#amberJar)" />
+    <rect x="1610" y="380" width="70" height="140" rx="10" fill="url(#greenJar)" />
+    <rect x="1710" y="350" width="85" height="170" rx="14" fill="url(#greenJar)" />
+    <rect x="1820" y="390" width="65" height="130" rx="8" fill="url(#amberJar)" />
+
+    <!-- Ambient Counter Surface Glow -->
+    <ellipse cx="1600" cy="900" rx="500" ry="220" fill="#10B981" opacity="0.15" />
+    <ellipse cx="300" cy="850" rx="400" ry="200" fill="#0A2A20" opacity="0.4" />
+  </g>
+</svg>

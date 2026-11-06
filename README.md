@@ -390,6 +390,21 @@ The platform provides dedicated, role-tailored interfaces:
 - `POST /api/dispensary/inventory/csv` — Bulk inventory upload via CSV file.
 - `GET /api/dispensary/transactions` — Audit ledger of all stock additions, reservations, and disbursements.
 
+### 5. Dispensary Dashboard Data Layer & CORS Configuration
+The Rxify frontend supports dual operational data modes:
+- **Mock Service Worker (Default)**: In development, MSW intercepts `/api/pharmacy/*`, `/api/prescriptions/*`, and `/api/inventory/*` with deterministic 100–300ms simulated latency and seed records.
+- **FastAPI Real Mode**: Set `VITE_API_BASE_URL=http://localhost:8000` in `better-frontend/.env` to bypass MSW and route directly to the FastAPI backend.
+- **CORS Notice**: When connecting to the FastAPI backend at `http://localhost:8000`, verify `main.py` permits requests from `http://localhost:3000` (or `http://127.0.0.1:3000`) in `CORSMiddleware`:
+  ```python
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+      allow_credentials=True,
+      allow_methods=["*"],
+      allow_headers=["*"],
+  )
+  ```
+
 ---
 
 ## 🧪 Testing & Diagnostics
