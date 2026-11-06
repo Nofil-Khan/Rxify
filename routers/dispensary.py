@@ -15,7 +15,8 @@ Full implementation of the Dispensary feature according to specification:
 from __future__ import annotations
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
+import json
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile, WebSocket, WebSocketDisconnect
 
 from core.security import create_access_token, require_dispensary, require_role
 from database.db import get_conn
@@ -36,6 +37,7 @@ from models.dispensary import (
 )
 from services import inventory_availability as availability_service
 from services import dispensary as dispensary_service
+from services.websocket_manager import dispensary_ws_manager, verify_ws_token
 
 router = APIRouter(prefix="/api/dispensary", tags=["dispensary"])
 
@@ -410,6 +412,55 @@ def get_request_detail(
     if not detail:
         raise HTTPException(status_code=404, detail="Request not found.")
     return detail
+
+
+# =============================================================================
+# 4.1 Real-Time WebSocket Channel (Replaces 30s Polling)
+# =============================================================================
+
+@router.websocket("/ws/{dispensary_id}")
+async def dispensary_websocket_channel(
+    websocket: WebSocket,
+    dispensary_id: int,
+    token: Optional[str] = Query(None),
+):
+    """Real-time bi-directional WebSocket connection for dispensary workspaces.
+
+    ARCHITECTURE OVERVIEW:
+    - Eliminates redundant client polling loops.
+    - Authenticates the JWT token supplied in the query string (?token=...).
+    - Registers the WebSocket with DispensaryConnectionManager.
+    - Instantly receives server pushes when new tickets arrive or stock changes.
+    - Supports heartbeat ping/pong to prevent proxy connection timeouts.
+    """
+    # 1. Validate JWT credential
+    if not verify_ws_token(token, dispensary_id):
+        # 1008 = Policy Violation (Unauthorized)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # 2. Register active connection
+    await dispensary_ws_manager.connect(websocket, dispensary_id)
+
+    # 3. Send initial connected confirmation
+    await websocket.send_text(
+        json.dumps({
+            "type": "CONNECTION_ESTABLISHED",
+            "dispensary_id": dispensary_id,
+            "message": "Connected to Rxify Live Dispensary WebSocket stream.",
+        })
+    )
+
+    # 4. Listen for client pings and keep connection open
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        await dispensary_ws_manager.disconnect(websocket, dispensary_id)
+    except Exception:
+        await dispensary_ws_manager.disconnect(websocket, dispensary_id)
 
 
 # =============================================================================

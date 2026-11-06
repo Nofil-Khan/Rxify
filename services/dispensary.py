@@ -18,6 +18,30 @@ from database.db import get_conn, get_password_hash, verify_password
 # 1. Dispensary Entity CRUD & Authentication
 # =============================================================================
 
+def _broadcast_queue_update(
+    dispensary_id: int,
+    request_id: int,
+    event: str = "STATUS_CHANGED",
+    prescription_id: Optional[int] = None,
+    status: Optional[str] = None,
+) -> None:
+    """Threadsafe helper to push queue changes over WebSocket to active screens."""
+    try:
+        from services.websocket_manager import dispensary_ws_manager
+        payload: Dict[str, Any] = {
+            "type": "QUEUE_UPDATED",
+            "event": event,
+            "request_id": request_id,
+        }
+        if prescription_id is not None:
+            payload["prescription_id"] = prescription_id
+        if status is not None:
+            payload["status"] = status
+        dispensary_ws_manager.notify_dispensary_sync(dispensary_id, payload)
+    except Exception as exc:
+        print(f"[WS BROADCAST WARNING] Could not emit event: {exc}")
+
+
 def create_dispensary(
     hospital_id: Optional[int] = None,
     name: str = "",
@@ -698,6 +722,15 @@ def create_dispensary_request_for_prescription(prescription_id: int) -> Optional
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(
+                dispensary_id,
+                request_id,
+                event="NEW_TICKET",
+                prescription_id=prescription_id,
+                status=overall_status,
+            )
             return get_request_detail(dispensary_id, request_id)
 
 def confirm_or_approve_request(
@@ -818,6 +851,10 @@ def confirm_or_approve_request(
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 def process_request(dispensary_id: int, request_id: int) -> Dict[str, Any]:
@@ -972,6 +1009,10 @@ def request_reconsultation(
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
@@ -1012,6 +1053,10 @@ def mark_request_ready(dispensary_id: int, request_id: int) -> Dict[str, Any]:
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -1156,6 +1201,10 @@ def dispense_request(
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -1233,6 +1282,10 @@ def cancel_request(dispensary_id: int, request_id: int, notes: Optional[str] = N
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 
@@ -2073,6 +2126,10 @@ def update_request_item_decision(
             )
 
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 def verify_prescription(
@@ -2128,6 +2185,10 @@ def verify_prescription(
                 (user_id, sig, json.dumps(checklist_dict), request_id),
             )
             conn.commit()
+
+            # Broadcast real-time WebSocket event to all connected dispensary workspace dashboards
+            _broadcast_queue_update(dispensary_id, request_id)
+
             return get_request_detail(dispensary_id, request_id)
 
 def get_inventory_transactions(

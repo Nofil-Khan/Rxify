@@ -16,6 +16,15 @@ app = FastAPI(
 # ── Run idempotent DB migrations on startup ────────────────────────────────────
 init_db()
 
+
+@app.on_event("startup")
+async def startup_event():
+    """Register running event loop with real-time WebSocket connection manager."""
+    import asyncio
+    from services.websocket_manager import dispensary_ws_manager
+    dispensary_ws_manager.set_event_loop(asyncio.get_running_loop())
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
