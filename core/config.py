@@ -5,9 +5,8 @@ import os
 load_dotenv()
 
 SECRET_KEY: str = os.getenv(
-    "SECRET_KEY"
-
-    # "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",  # 64-char hex fallback (≥32 bytes)
+    "SECRET_KEY",
+    "rxify_secure_production_secret_key_fallback_minimum_32_bytes_long_entropy",
 )
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

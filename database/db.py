@@ -39,15 +39,20 @@ def _get_dsn() -> str:
     return dsn
 
 
-_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None   #private variable
+import time
+
+_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None   # private variable
+_POOL_TIMEOUT_SECONDS = float(os.getenv("DB_POOL_TIMEOUT", "3.0"))
 
 
 def get_pool() -> psycopg2.pool.ThreadedConnectionPool:
     global _pool
     if _pool is None or _pool.closed:
+        minconn = int(os.getenv("DB_POOL_MIN", "5"))
+        maxconn = int(os.getenv("DB_POOL_MAX", "50"))
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=20,
+            minconn=minconn,
+            maxconn=maxconn,
             dsn=_get_dsn(),
         )
     return _pool
@@ -57,11 +62,34 @@ def get_pool() -> psycopg2.pool.ThreadedConnectionPool:
 # Context managers
 # ---------------------------------------------------------------------------
 
+def _acquire_conn(pool: psycopg2.pool.ThreadedConnectionPool, timeout: float = _POOL_TIMEOUT_SECONDS) -> PgConn:
+    """Acquire a connection from the pool with retry backoff to survive burst traffic."""
+    deadline = time.time() + timeout
+    attempt = 0
+    while True:
+        try:
+            conn = pool.getconn()
+            if conn and not getattr(conn, "closed", 0):
+                return conn
+            # Stale connection obtained; close and discard
+            if conn:
+                pool.putconn(conn, close=True)
+        except psycopg2.pool.PoolError:
+            if time.time() >= deadline:
+                raise RuntimeError(
+                    f"Database connection pool exhausted after waiting {timeout}s. "
+                    "Consider increasing DB_POOL_MAX or checking for connection leaks."
+                )
+        attempt += 1
+        sleep_ms = min(0.02 * (2 ** attempt), 0.2)
+        time.sleep(sleep_ms)
+
+
 @contextmanager
 def get_conn() -> Generator[PgConn, None, None]:
     """Yield a pooled psycopg2 connection that auto-commits on success or rolls back on error."""
     pool = get_pool()
-    conn = pool.getconn()
+    conn = _acquire_conn(pool)
     try:
         yield conn
         conn.commit()
@@ -576,6 +604,37 @@ def _ensure_current_medication_schema(conn: PgConn) -> None:
     print("[DB] current_medication constraints and indexes ensured.")
 
 
+def _ensure_high_performance_and_ocr_schema(conn: PgConn) -> None:
+    """Ensure persistent OCR job tracking table and high-throughput query indexes exist."""
+    with conn.cursor() as cur:
+        # 1. Persistent OCR job table for multi-process and resilient background tasks
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ocr_job (
+                job_id          TEXT PRIMARY KEY,
+                status          TEXT NOT NULL DEFAULT 'processing',
+                image_path      TEXT,
+                extracted       JSONB,
+                error           TEXT,
+                prescription_id INTEGER,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_ocr_job_status ON ocr_job(status);
+            CREATE INDEX IF NOT EXISTS idx_ocr_job_created ON ocr_job(created_at);
+            """
+        )
+
+        # 2. High-concurrency composite indexes
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_slot_doc_date ON appointment_slot(doctor_id, slot_date);
+            CREATE INDEX IF NOT EXISTS idx_inv_txn_disp_created ON inventory_transaction(dispensary_id, created_at DESC);
+            """
+        )
+    print("[DB] Persistent OCR job tracking and high-throughput indexes ensured.")
+
+
 def init_db() -> None:
     """Run the full idempotent schema migration from database/schema.sql if needed."""
     with get_conn() as conn:
@@ -590,6 +649,7 @@ def init_db() -> None:
                 _ensure_prescription_match_status_column(conn)
                 _ensure_patient_resolved_column(conn)
                 _ensure_current_medication_schema(conn)
+                _ensure_high_performance_and_ocr_schema(conn)
                 return
 
     schema_path = Path(__file__).parent / "schema.sql"
@@ -599,6 +659,7 @@ def init_db() -> None:
             cur.execute(sql)
             # Ensure backfill is run for new setups as well, though usually not needed
             cur.execute("UPDATE patient SET patient_code = NULL WHERE patient_code IS NULL;")
+        _ensure_high_performance_and_ocr_schema(conn)
     print("[DB] PostgreSQL schema initialised (all tables ensured).")
 
 

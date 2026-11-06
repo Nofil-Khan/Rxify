@@ -254,26 +254,33 @@ def book_appointment(
                 target_slot_id = slots[0]["slot_id"]
                 slot_matched = not slots[0]["suggested"]
 
-            # Capacity check
+            # 1. Lock the appointment slot row to eliminate double-booking race conditions
             cur.execute(
                 """
-                SELECT sl.slot_id, sl.clinic_id, sl.max_patients,
-                       COALESCE(booked.cnt, 0) AS booked_count
-                FROM appointment_slot sl
-                LEFT JOIN (
-                    SELECT slot_id, COUNT(*) AS cnt
-                    FROM appointment
-                    WHERE status NOT IN ('CANCELLED', 'NO_SHOW')
-                    GROUP BY slot_id
-                ) booked ON booked.slot_id = sl.slot_id
-                WHERE sl.slot_id = %s AND sl.doctor_id = %s
+                SELECT slot_id, clinic_id, max_patients
+                FROM appointment_slot
+                WHERE slot_id = %s AND doctor_id = %s
+                FOR UPDATE
                 """,
                 (target_slot_id, doctor_id),
             )
             slot = cur.fetchone()
             if not slot:
                 raise ValueError("Selected slot not found or does not belong to this doctor.")
-            if slot["booked_count"] >= slot["max_patients"]:
+
+            # 2. Count active bookings while holding row lock
+            cur.execute(
+                """
+                SELECT COUNT(*) AS booked_count
+                FROM appointment
+                WHERE slot_id = %s AND status NOT IN ('CANCELLED', 'NO_SHOW')
+                """,
+                (target_slot_id,),
+            )
+            count_row = cur.fetchone()
+            booked_count = count_row["booked_count"] if count_row else 0
+
+            if booked_count >= slot["max_patients"]:
                 raise ValueError(
                     "The selected slot is now fully booked. Please refresh and try another slot."
                 )

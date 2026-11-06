@@ -25,6 +25,25 @@ _UPLOADS_DIR = Path(__file__).parent.parent / "data" / "uploads"
 _MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
 
+def _is_valid_image_bytes(data: bytes) -> bool:
+    """Verify magic bytes to prevent MIME spoofing and disguised payloads."""
+    if len(data) < 12:
+        return False
+    # JPEG: FF D8 FF
+    if data[:3] == b"\xff\xd8\xff":
+        return True
+    # PNG: \x89PNG\r\n\x1a\n
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return True
+    # WebP: RIFF....WEBP
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return True
+    # HEIC/HEIF container check
+    if b"ftyp" in data[4:20]:
+        return True
+    return False
+
+
 # ── Background worker ──────────────────────────────────────────────────────────
 
 def _run_ocr_and_save(
@@ -64,7 +83,7 @@ async def upload_image(
     file: UploadFile = File(...),
     current_user: dict = Depends(require_role("PATIENT")),
 ):
-    # ── Validate file type ────────────────────────────────────────────────────
+    # ── Validate file type & magic bytes ──────────────────────────────────────
     content_type = file.content_type or "image/jpeg"
     if content_type not in _ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
@@ -78,16 +97,19 @@ async def upload_image(
             detail=f"File too large. Maximum allowed size is 20 MB (received {len(image_bytes) // (1024*1024)} MB).",
         )
 
-    # ── Save upload locally with a unique filename ────────────────────────────
-    _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = file.filename or "upload.jpg"
-    file_path = _UPLOADS_DIR / filename
+    # ── Deep magic byte inspection ────────────────────────────────────────────
+    if not _is_valid_image_bytes(image_bytes):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid image format. The uploaded file does not match expected image signatures.",
+        )
 
-    counter = 1
-    stem, suffix = file_path.stem, file_path.suffix
-    while file_path.exists():
-        file_path = _UPLOADS_DIR / f"{stem}-{counter}{suffix}"
-        counter += 1
+    # ── Save upload safely with randomized UUID (prevents traversal / collisions)
+    _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    raw_suffix = Path(file.filename or "").suffix.lower()
+    safe_ext = raw_suffix if raw_suffix in {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"} else ".jpg"
+    safe_filename = f"{uuid.uuid4().hex}{safe_ext}"
+    file_path = _UPLOADS_DIR / safe_filename
 
     file_path.write_bytes(image_bytes)
 
