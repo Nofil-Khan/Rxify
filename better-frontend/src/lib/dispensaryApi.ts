@@ -419,6 +419,50 @@ export function fetchDispensaryAlerts(): Promise<{
   return req("/api/dispensary/alerts");
 }
 
+export interface TopOrderedMedicine {
+  medicine_id: number;
+  generic_name: string;
+  brand_name: string;
+  category: string;
+  strength: string;
+  form: string;
+  total_orders: number;
+  total_prescribed_qty: number;
+  total_dispensed_qty: number;
+  in_stock_qty: number;
+  reorder_level: number;
+}
+
+export interface CategoryDistribution {
+  category: string;
+  item_count: number;
+  total_quantity: number;
+}
+
+export interface OrderTrendItem {
+  day: string;
+  total_orders: number;
+  dispensed_orders: number;
+  cancelled_orders: number;
+}
+
+export interface DispensaryAnalyticsData {
+  top_medicines: TopOrderedMedicine[];
+  categories: CategoryDistribution[];
+  order_trend: OrderTrendItem[];
+  kpis: {
+    total_orders: number;
+    total_dispensed: number;
+    fulfillment_rate: number;
+    avg_prep_time_minutes: number;
+    total_medicines_tracked: number;
+  };
+}
+
+export function fetchDispensaryAnalytics(days: number = 30): Promise<DispensaryAnalyticsData> {
+  return req(`/api/dispensary/analytics?days=${days}`);
+}
+
 /** POST /api/dispensary/inventory/bulk */
 
 export function bulkAddStock(

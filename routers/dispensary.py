@@ -650,6 +650,16 @@ def get_inventory_alerts(current_dispensary: dict = Depends(require_dispensary()
     return dispensary_service.get_inventory_alerts(dispensary_id)
 
 
+@router.get("/analytics")
+def get_dispensary_analytics(
+    days: int = Query(30, ge=1, le=365),
+    current_dispensary: dict = Depends(require_dispensary()),
+):
+    """Get dispensary operational analytics including top-ordered medicines, category split, and order velocity."""
+    dispensary_id = current_dispensary["dispensary_id"]
+    return dispensary_service.get_dispensary_analytics(dispensary_id, days=days)
+
+
 # =============================================================================
 # 7. Patient View Endpoints
 # =============================================================================
