@@ -1721,10 +1721,10 @@ def get_inventory_alerts(dispensary_id: int) -> Dict[str, Any]:
             }
 
 def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, Any]:
-    """Calculate rich operational analytics for dispensary: most ordered medicines, category breakdown, and trends."""
+    """Calculate rich operational analytics for dispensary strictly from real DB records."""
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # 1. Top most ordered medicines
+            # 1. Top most ordered medicines from actual requests
             cur.execute(
                 """
                 SELECT
@@ -1733,7 +1733,7 @@ def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, An
                     COALESCE(m.brand_name, m.generic_name) AS brand_name,
                     COALESCE(m.category, 'General') AS category,
                     COALESCE(m.strength, '500 mg') AS strength,
-                    COALESCE(m.form, 'Tablet') AS form,
+                    COALESCE(m.form::TEXT, 'TABLET') AS form,
                     COUNT(DISTINCT item.request_id) AS total_orders,
                     COALESCE(SUM(item.required_quantity), 0) AS total_prescribed_qty,
                     COALESCE(SUM(COALESCE(item.dispensed_quantity, item.required_quantity)), 0) AS total_dispensed_qty,
@@ -1753,37 +1753,7 @@ def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, An
             )
             top_medicines = [dict(r) for r in cur.fetchall()]
 
-            # Fallback realistic top medicines if dispensary has no historical requests yet
-            if not top_medicines:
-                cur.execute(
-                    """
-                    SELECT
-                        m.medicine_id,
-                        m.generic_name,
-                        COALESCE(m.brand_name, m.generic_name) AS brand_name,
-                        COALESCE(m.category, 'Antibiotics') AS category,
-                        COALESCE(m.strength, '500 mg') AS strength,
-                        COALESCE(m.form, 'Capsule') AS form,
-                        COALESCE(stock.available_quantity, 40) AS in_stock_qty,
-                        COALESCE(stock.reorder_level, 20) AS reorder_level
-                    FROM medicine m
-                    LEFT JOIN inventory_dispensary_stock stock
-                        ON stock.dispensary_id = %s AND stock.medicine_id = m.medicine_id
-                    LIMIT 8
-                    """,
-                    (dispensary_id,),
-                )
-                sample = cur.fetchall()
-                simulated_orders = [142, 118, 95, 84, 62, 54, 41, 36]
-                simulated_prescribed = [710, 590, 475, 420, 310, 270, 205, 180]
-                for idx, row in enumerate(sample):
-                    d = dict(row)
-                    d["total_orders"] = simulated_orders[idx % len(simulated_orders)]
-                    d["total_prescribed_qty"] = simulated_prescribed[idx % len(simulated_prescribed)]
-                    d["total_dispensed_qty"] = int(d["total_prescribed_qty"] * 0.94)
-                    top_medicines.append(d)
-
-            # 2. Category distribution
+            # 2. Category distribution from actual requests
             cur.execute(
                 """
                 SELECT
@@ -1801,16 +1771,8 @@ def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, An
                 (dispensary_id,),
             )
             categories = [dict(r) for r in cur.fetchall()]
-            if not categories:
-                categories = [
-                    {"category": "Antibiotics", "item_count": 184, "total_quantity": 920},
-                    {"category": "Analgesics", "item_count": 152, "total_quantity": 760},
-                    {"category": "Antihistamines", "item_count": 98, "total_quantity": 490},
-                    {"category": "Gastrointestinal", "item_count": 76, "total_quantity": 380},
-                    {"category": "Respiratory", "item_count": 52, "total_quantity": 260},
-                ]
 
-            # 3. 7-day order volume trend
+            # 3. 14-day order volume trend from real requests
             cur.execute(
                 """
                 SELECT
@@ -1826,36 +1788,25 @@ def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, An
                 (dispensary_id,),
             )
             trend_rows = [dict(r) for r in cur.fetchall()]
-            if not trend_rows:
-                # Default 7-day baseline trend
-                from datetime import datetime, timedelta
-                now = datetime.now()
-                trend_rows = [
-                    {
-                        "day": (now - timedelta(days=i)).strftime("%Y-%m-%d"),
-                        "total_orders": 18 + (i * 3) % 11,
-                        "dispensed_orders": 16 + (i * 3) % 10,
-                        "cancelled_orders": 1 if i % 3 == 0 else 0,
-                    }
-                    for i in range(6, -1, -1)
-                ]
 
-            # 4. Overall KPIs
+            # 4. Overall KPIs strictly computed from DB
             cur.execute(
                 """
                 SELECT
                     COUNT(*) AS total_orders,
                     COUNT(*) FILTER (WHERE status = 'DISPENSED') AS total_dispensed,
-                    COUNT(*) FILTER (WHERE status = 'CANCELLED') AS total_cancelled
+                    COUNT(*) FILTER (WHERE status = 'CANCELLED') AS total_cancelled,
+                    COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/60)), 0) AS avg_prep_time
                 FROM dispensary_request
                 WHERE dispensary_id = %s
                 """,
                 (dispensary_id,),
             )
             kpis = dict(cur.fetchone() or {})
-            total_orders = kpis.get("total_orders", 0) or 248
-            total_dispensed = kpis.get("total_dispensed", 0) or 232
-            fulfillment_rate = round((total_dispensed / total_orders * 100), 1) if total_orders > 0 else 94.5
+            total_orders = int(kpis.get("total_orders") or 0)
+            total_dispensed = int(kpis.get("total_dispensed") or 0)
+            avg_prep_time = int(kpis.get("avg_prep_time") or 0)
+            fulfillment_rate = round((total_dispensed / total_orders * 100), 1) if total_orders > 0 else 0.0
 
             return {
                 "top_medicines": top_medicines,
@@ -1865,7 +1816,7 @@ def get_dispensary_analytics(dispensary_id: int, days: int = 30) -> Dict[str, An
                     "total_orders": total_orders,
                     "total_dispensed": total_dispensed,
                     "fulfillment_rate": fulfillment_rate,
-                    "avg_prep_time_minutes": 14,
+                    "avg_prep_time_minutes": avg_prep_time,
                     "total_medicines_tracked": len(top_medicines),
                 },
             }

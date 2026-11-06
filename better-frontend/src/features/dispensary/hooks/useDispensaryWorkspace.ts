@@ -5,7 +5,6 @@ import {
   PipelineStats,
   FulfillmentStatus,
 } from '../types';
-import { MOCK_PRESCRIPTIONS, INITIAL_PIPELINE_STATS } from '../mocks/dispensaryMockData';
 
 export type QueueSortOption = 'newest' | 'oldest' | 'urgent';
 
@@ -57,10 +56,15 @@ interface DispensaryWorkspaceState {
 }
 
 export const useDispensaryWorkspace = create<DispensaryWorkspaceState>((set) => ({
-  prescriptions: MOCK_PRESCRIPTIONS,
-  selectedPrescriptionId: MOCK_PRESCRIPTIONS[0]?.id ?? '',
-  selectedMedicineId: MOCK_PRESCRIPTIONS[0]?.medicines[0]?.id ?? '',
-  pipelineStats: INITIAL_PIPELINE_STATS,
+  prescriptions: [],
+  selectedPrescriptionId: '',
+  selectedMedicineId: '',
+  pipelineStats: {
+    newCount: 0,
+    preparingCount: 0,
+    readyCount: 0,
+    completedCount: 0,
+  },
   activeNavTab: 'workspace',
   workflowStep: 0,
   searchQuery: '',

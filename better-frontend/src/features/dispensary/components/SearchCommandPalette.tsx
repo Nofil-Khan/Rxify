@@ -5,11 +5,10 @@ import { Command } from 'cmdk';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import KeyCap from './KeyCap';
 import { useDispensaryWorkspace } from '../hooks/useDispensaryWorkspace';
-import { MOCK_PRESCRIPTIONS } from '../mocks/dispensaryMockData';
 
 export const SearchCommandPalette: React.FC = () => {
   const [open, setOpen] = React.useState(false);
-  const { selectPrescription, selectMedicine } = useDispensaryWorkspace();
+  const { selectPrescription, selectMedicine, prescriptions } = useDispensaryWorkspace();
 
   useHotkeys(['ctrl+k', 'meta+k'], (e) => {
     e.preventDefault();
@@ -60,7 +59,7 @@ export const SearchCommandPalette: React.FC = () => {
               </Command.Empty>
 
               <Command.Group heading="Patients" className="text-[11px] font-semibold text-mint-300 px-2 py-1.5 uppercase tracking-wider">
-                {MOCK_PRESCRIPTIONS.map((rx) => (
+                {prescriptions.map((rx) => (
                   <Command.Item
                     key={rx.id}
                     onSelect={() => handleSelectPrescription(rx.id)}
@@ -76,7 +75,7 @@ export const SearchCommandPalette: React.FC = () => {
               </Command.Group>
 
               <Command.Group heading="Medicines" className="text-[11px] font-semibold text-mint-300 px-2 py-1.5 uppercase tracking-wider mt-2">
-                {MOCK_PRESCRIPTIONS.flatMap((rx) =>
+                {prescriptions.flatMap((rx) =>
                   rx.medicines.map((med) => (
                     <Command.Item
                       key={`${rx.id}-${med.id}`}

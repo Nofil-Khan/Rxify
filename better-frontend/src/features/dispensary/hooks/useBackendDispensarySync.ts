@@ -115,38 +115,46 @@ export function useBackendDispensarySync() {
           }
         }
 
-        if (queue.status === 'fulfilled' && Array.isArray(queue.value) && queue.value.length > 0) {
-          // Fetch details only for items not already cached to prevent hammering
-          const itemsToFetch = queue.value.slice(0, 8);
-          await Promise.all(
-            itemsToFetch.map(async (q) => {
-              if (!detailsCacheRef.current.has(q.request_id)) {
-                try {
-                  const detail = await fetchDispensaryRequestDetail(q.request_id);
-                  if (detail) detailsCacheRef.current.set(q.request_id, detail);
-                } catch {
-                  /* ignore single item failure */
-                }
-              }
-            })
-          );
-
-          if (!active) return;
-
-          const details = itemsToFetch
-            .map((q) => detailsCacheRef.current.get(q.request_id))
-            .filter(Boolean) as RequestDetail[];
-
-          if (details.length > 0) {
-            const mapped = details.map((d) => mapDetailToWorkspace(d, invMap));
-            useDispensaryWorkspace.setState((state) => {
-              const currentValid = mapped.some((m) => m.id === state.selectedPrescriptionId);
-              return {
-                prescriptions: mapped,
-                selectedPrescriptionId: currentValid ? state.selectedPrescriptionId : mapped[0].id,
-                selectedMedicineId: currentValid ? state.selectedMedicineId : (mapped[0].medicines[0]?.id || state.selectedMedicineId),
-              };
+        if (queue.status === 'fulfilled' && Array.isArray(queue.value)) {
+          if (queue.value.length === 0) {
+            useDispensaryWorkspace.setState({
+              prescriptions: [],
+              selectedPrescriptionId: '',
+              selectedMedicineId: '',
             });
+          } else {
+            // Fetch details only for items not already cached to prevent hammering
+            const itemsToFetch = queue.value.slice(0, 8);
+            await Promise.all(
+              itemsToFetch.map(async (q) => {
+                if (!detailsCacheRef.current.has(q.request_id)) {
+                  try {
+                    const detail = await fetchDispensaryRequestDetail(q.request_id);
+                    if (detail) detailsCacheRef.current.set(q.request_id, detail);
+                  } catch {
+                    /* ignore single item failure */
+                  }
+                }
+              })
+            );
+
+            if (!active) return;
+
+            const details = itemsToFetch
+              .map((q) => detailsCacheRef.current.get(q.request_id))
+              .filter(Boolean) as RequestDetail[];
+
+            if (details.length > 0) {
+              const mapped = details.map((d) => mapDetailToWorkspace(d, invMap));
+              useDispensaryWorkspace.setState((state) => {
+                const currentValid = mapped.some((m) => m.id === state.selectedPrescriptionId);
+                return {
+                  prescriptions: mapped,
+                  selectedPrescriptionId: currentValid ? state.selectedPrescriptionId : mapped[0].id,
+                  selectedMedicineId: currentValid ? state.selectedMedicineId : (mapped[0].medicines[0]?.id || state.selectedMedicineId),
+                };
+              });
+            }
           }
         }
 

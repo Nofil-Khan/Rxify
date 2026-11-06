@@ -58,6 +58,12 @@ export const CategoryDistributionCard: React.FC<Props> = ({ categories }) => {
             </div>
           );
         })}
+
+        {categories.length === 0 && (
+          <div className="py-8 text-center text-xs text-cream-to/50">
+            No category distribution data available yet.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -14,14 +14,12 @@ import AdjustFulfillmentModal from '@/features/dispensary/components/AdjustFulfi
 import ReconsultationModal from '@/features/dispensary/components/ReconsultationModal';
 import ViewPrescriptionDialog from '@/features/dispensary/components/ViewPrescriptionDialog';
 import ManageStockModal from '@/features/dispensary/components/ManageStockModal';
-import { useMockWebSocket } from '@/features/dispensary/hooks/useMockWebSocket';
 import { useBackendDispensarySync } from '@/features/dispensary/hooks/useBackendDispensarySync';
 import InventoryView from '@/features/dispensary/components/inventory/InventoryView';
 import OrdersView from '@/features/dispensary/components/orders/OrdersView';
 import AnalyticsView from '@/features/dispensary/components/analytics/AnalyticsView';
 
 export const Workspace: React.FC = () => {
-  useMockWebSocket();
   useBackendDispensarySync();
   const shouldReduceMotion = useReducedMotion();
   const location = useLocation();

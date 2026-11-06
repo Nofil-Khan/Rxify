@@ -56,6 +56,12 @@ export const OrderVelocityCard: React.FC<Props> = ({ trend, avgPrepMinutes, fulf
             </div>
           );
         })}
+
+        {trend.length === 0 && (
+          <div className="w-full py-8 text-center text-xs text-cream-to/50">
+            No 14-day velocity records yet.
+          </div>
+        )}
       </div>
     </div>
   );

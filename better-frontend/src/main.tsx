@@ -22,11 +22,7 @@ const queryClient = new QueryClient({
 });
 
 async function prepareApp() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('rxify_token') : null;
-  if (!import.meta.env.VITE_API_BASE_URL && !token) {
-    const { enableMocking } = await import('./features/dispensary/mocks/browser');
-    await enableMocking();
-  }
+  // Unconditionally connect to real FastAPI backend database — no MSW mock interception
 }
 
 prepareApp().then(() => {

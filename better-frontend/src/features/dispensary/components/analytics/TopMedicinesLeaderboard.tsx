@@ -92,6 +92,12 @@ export const TopMedicinesLeaderboard: React.FC<Props> = ({ medicines }) => {
             </div>
           );
         })}
+
+        {medicines.length === 0 && (
+          <div className="py-12 text-center text-xs text-cream-to/50">
+            No prescription requests recorded yet. Data will populate in real time as prescriptions are processed.
+          </div>
+        )}
       </div>
     </div>
   );
