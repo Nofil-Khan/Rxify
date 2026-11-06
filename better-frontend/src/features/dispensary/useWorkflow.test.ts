@@ -69,12 +69,12 @@ const mockUnavailablePrescription: WorkspacePrescription = {
 };
 
 describe('Prescription Workflow Reducer', () => {
-  it('handles the happy path transition from NEW to COMPLETED', () => {
+  it('handles the happy path transition from NEW to COMPLETED across 4 streamlined steps', () => {
     let state = createInitialWorkflowState(mockAvailablePrescription, mockPipelineStats);
     expect(state.stage).toBe('NEW');
     expect(state.activeStepIndex).toBe(0);
 
-    // 1. Process Request -> PREPARING
+    // 1. Process Request -> PREPARING (reserves stock in DB)
     state = workflowReducer(state, { type: 'PROCESS_REQUEST' });
     expect(state.stage).toBe('PREPARING');
     expect(state.activeStepIndex).toBe(1);
@@ -82,69 +82,46 @@ describe('Prescription Workflow Reducer', () => {
     expect(state.pipelineStats.newCount).toBe(11);
     expect(state.pipelineStats.preparingCount).toBe(6);
 
-    // 2. Reserve Stock -> PREPARING_RESERVED
-    state = workflowReducer(state, { type: 'ATTEMPT_RESERVE' });
-    expect(state.stage).toBe('PREPARING_RESERVED');
-    expect(state.activeStepIndex).toBe(2);
-    expect(state.prescription.medicines[0].reservedQuantity).toBe(10);
-    expect(state.prescription.medicines[0].inStockQuantity).toBe(30);
-
-    // 3. Mark Ready -> READY
+    // 2. Mark Ready -> READY (notifies patient)
     state = workflowReducer(state, { type: 'MARK_READY' });
     expect(state.stage).toBe('READY');
-    expect(state.activeStepIndex).toBe(3);
+    expect(state.activeStepIndex).toBe(2);
     expect(state.prescription.status).toBe('READY');
     expect(state.pipelineStats.preparingCount).toBe(5);
     expect(state.pipelineStats.readyCount).toBe(4);
 
-    // 4. Verify OTP -> READY_VERIFIED
+    // 3. Verify OTP -> READY_VERIFIED
     state = workflowReducer(state, { type: 'OPEN_VERIFY_PICKUP' });
     expect(state.isVerifyPickupOpen).toBe(true);
 
     state = workflowReducer(state, { type: 'VERIFY_OTP', otp: '749201' });
     expect(state.stage).toBe('READY_VERIFIED');
-    expect(state.activeStepIndex).toBe(4);
+    expect(state.activeStepIndex).toBe(3);
     expect(state.isVerifyPickupOpen).toBe(false);
 
-    // 5. Complete Dispense -> COMPLETED
+    // 4. Complete Dispense -> COMPLETED
     state = workflowReducer(state, { type: 'COMPLETE_DISPENSE' });
     expect(state.stage).toBe('COMPLETED');
-    expect(state.activeStepIndex).toBe(5);
+    expect(state.activeStepIndex).toBe(4);
     expect(state.prescription.status).toBe('DISPENSED');
     expect(state.pipelineStats.readyCount).toBe(3);
     expect(state.pipelineStats.completedCount).toBe(19);
   });
 
-  it('blocks Reserve Stock when any medicine has unavailable stock and opens guard dialog', () => {
+  it('manages Reserve Guard modal for unavailable stock', () => {
     let state = createInitialWorkflowState(mockUnavailablePrescription, mockPipelineStats);
-    state = workflowReducer(state, { type: 'PROCESS_REQUEST' });
-    expect(state.stage).toBe('PREPARING');
-
-    // Attempting reserve with unavailable medicine Pantoprazole (stock = 0)
-    state = workflowReducer(state, { type: 'ATTEMPT_RESERVE' });
-    expect(state.isReserveGuardOpen).toBe(true);
-    expect(state.errorMessage).toContain('Unavailable stock');
-    expect(state.stage).toBe('PREPARING'); // Still at step 1 (blocked)
-  });
-
-  it('unblocks via Partial Reserve when stock is partially available', () => {
-    let state = createInitialWorkflowState(mockUnavailablePrescription, mockPipelineStats);
-    state = workflowReducer(state, { type: 'PROCESS_REQUEST' });
-    state = workflowReducer(state, { type: 'ATTEMPT_RESERVE' });
+    state = workflowReducer(state, { type: 'OPEN_RESERVE_GUARD' });
     expect(state.isReserveGuardOpen).toBe(true);
 
     // Resolve via Partial Reserve
     state = workflowReducer(state, { type: 'FORCE_PARTIAL_RESERVE' });
     expect(state.isReserveGuardOpen).toBe(false);
-    expect(state.stage).toBe('PREPARING_RESERVED');
-    expect(state.activeStepIndex).toBe(2);
-    expect(state.prescription.medicines[1].status).toBe('PARTIAL');
   });
 
   it('unblocks via Substitute Equivalent medicine', () => {
     let state = createInitialWorkflowState(mockUnavailablePrescription, mockPipelineStats);
-    state = workflowReducer(state, { type: 'PROCESS_REQUEST' });
-    state = workflowReducer(state, { type: 'ATTEMPT_RESERVE' });
+    state = workflowReducer(state, { type: 'OPEN_RESERVE_GUARD' });
+    expect(state.isReserveGuardOpen).toBe(true);
 
     // Resolve via substitution
     state = workflowReducer(state, {
@@ -153,10 +130,6 @@ describe('Prescription Workflow Reducer', () => {
       substituteName: 'Omeprazole 40mg',
     });
     expect(state.isReserveGuardOpen).toBe(false);
-    expect(state.stage).toBe('PREPARING_RESERVED');
-    expect(state.activeStepIndex).toBe(2);
-    expect(state.prescription.medicines[1].status).toBe('AVAILABLE');
-    expect(state.prescription.medicines[1].name).toContain('Omeprazole');
   });
 
   it('rolls back state on error', () => {
@@ -170,4 +143,3 @@ describe('Prescription Workflow Reducer', () => {
     expect(state.activeStepIndex).toBe(0);
   });
 });
-

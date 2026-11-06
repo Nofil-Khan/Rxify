@@ -63,3 +63,4 @@ export function mapDetailToWorkspace(d: RequestDetail, invMap: Map<number, Inven
     hasAlert: medicines.some((m) => m.status === 'UNAVAILABLE' || m.status === 'PARTIAL'),
   };
 }
+

@@ -131,3 +131,4 @@ def verify_ws_token(token: Optional[str], expected_dispensary_id: int) -> bool:
         return False
     except jwt.InvalidTokenError:
         return False
+

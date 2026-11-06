@@ -518,6 +518,7 @@ def reconsult_request(
             item_ids=body.item_ids,
         )
         return {
+            "success": True,
             "message": "Reconsultation advisory recorded and patient notified.",
             "request": updated,
         }
@@ -545,6 +546,7 @@ def update_item_decision(
             notes=body.notes,
         )
         return {
+            "success": True,
             "message": f"Medicine decision '{body.decision}' applied successfully.",
             "request": updated,
         }
@@ -577,6 +579,7 @@ def verify_prescription_route(
             notes=notes,
         )
         return {
+            "success": True,
             "message": "Prescription clinically verified & signed off.",
             "request": updated,
         }
@@ -613,6 +616,7 @@ def process_request(
     try:
         updated = dispensary_service.process_request(dispensary_id, request_id)
         return {
+            "success": True,
             "message": "Request is now being processed. Stock reserved.",
             "request": updated,
         }
@@ -630,6 +634,7 @@ def mark_request_ready(
     try:
         updated = dispensary_service.mark_request_ready(dispensary_id, request_id)
         return {
+            "success": True,
             "message": "Request marked READY for collection.",
             "request": updated,
         }
@@ -658,6 +663,7 @@ def dispense_request(
             pickup_code=pickup_code,
         )
         return {
+            "success": True,
             "message": "Medicines successfully dispensed. Stock updated.",
             "request": updated,
         }
@@ -676,6 +682,7 @@ def cancel_request(
     try:
         updated = dispensary_service.cancel_request(dispensary_id, request_id, notes)
         return {
+            "success": True,
             "message": "Request cancelled. Reserved stock released.",
             "request": updated,
         }

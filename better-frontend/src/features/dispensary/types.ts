@@ -117,10 +117,11 @@ export interface PipelineStats {
 }
 
 export const BackendCommandResultSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
+  success: z.boolean().default(true),
+  message: z.string().default('Success'),
   status: z.string().optional(),
   data: z.unknown().optional(),
+  request: z.unknown().optional(),
 });
 export type BackendCommandResult = z.infer<typeof BackendCommandResultSchema>;
 

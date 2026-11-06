@@ -61,26 +61,31 @@ export function useWorkflow() {
 
   const handleStepClick = React.useCallback(
     (stepIndex: number) => {
-      if (!state.prescription?.id || stepIndex !== state.activeStepIndex) return;
-      switch (stepIndex) {
-        case 0:
+      const rx = state.prescription;
+      if (!rx?.id) return;
+
+      if (stepIndex === 0) {
+        if (state.stage === 'NEW' || rx.status === 'PENDING') {
           stepMutation.mutate({ type: 'PROCESS_REQUEST' });
-          break;
-        case 1:
-          stepMutation.mutate({ type: 'ATTEMPT_RESERVE' });
-          break;
-        case 2:
+        }
+      } else if (stepIndex === 1) {
+        if (state.stage === 'PREPARING' || rx.status === 'PROCESSING') {
           stepMutation.mutate({ type: 'MARK_READY' });
-          break;
-        case 3:
+        }
+      } else if (stepIndex === 2) {
+        if (state.stage === 'READY' || state.stage === 'READY_VERIFIED' || rx.status === 'READY') {
           dispatch({ type: 'OPEN_VERIFY_PICKUP' });
-          break;
-        case 4:
+        }
+      } else if (stepIndex === 3) {
+        if (state.stage === 'READY_VERIFIED') {
           stepMutation.mutate({ type: 'COMPLETE_DISPENSE' });
-          break;
+        } else if (state.stage === 'READY' || rx.status === 'READY') {
+          // If verify hasn't been completed yet, open verify dialog first
+          dispatch({ type: 'OPEN_VERIFY_PICKUP' });
+        }
       }
     },
-    [state.activeStepIndex, stepMutation]
+    [state.prescription, state.stage, stepMutation]
   );
 
   useHotkeys('enter', (e) => {
@@ -100,6 +105,7 @@ export function useWorkflow() {
     dispatch,
     handleStepClick,
     triggerActiveStep: () => handleStepClick(state.activeStepIndex),
+    isPending: stepMutation.isPending,
   };
 }
 

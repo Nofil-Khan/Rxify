@@ -29,7 +29,7 @@ export const PrescriptionHeaderRow: React.FC<PrescriptionHeaderRowProps> = ({
               <h2 className="font-serif text-[22px] font-bold tracking-tight text-ink leading-tight">
                 {prescription.rxNumber}
               </h2>
-              <StatusPill status="NEW" />
+              <StatusPill status={prescription.status} />
             </div>
             <p className="text-xs text-ink-muted">
               <span className="font-semibold text-ink">{prescription.patientName}</span>

@@ -137,3 +137,4 @@ export function useDispensaryWebSocket({ onQueueUpdate }: UseDispensaryWebSocket
 }
 
 export default useDispensaryWebSocket;
+

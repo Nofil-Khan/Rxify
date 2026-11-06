@@ -30,8 +30,8 @@ export const MedicineActionsMenu: React.FC<MedicineActionsMenuProps> = ({ medici
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-ink-muted hover:bg-ink/5 hover:text-ink transition-colors focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
-            aria-label={`Actions for ${medicine.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-ink/5 text-ink-muted hover:bg-emerald-500/15 hover:text-emerald-800 transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
+            aria-label={`Actions menu for ${medicine.name}`}
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>

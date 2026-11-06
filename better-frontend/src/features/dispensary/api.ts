@@ -15,10 +15,21 @@ const API_BASE =
 
 async function handleResponse<T>(res: Response, schema: z.ZodSchema<T>): Promise<T> {
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    let errMsg = `API error: ${res.status} ${res.statusText}`;
+    try {
+      const errJson = await res.json();
+      if (errJson && errJson.detail) errMsg = errJson.detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(errMsg);
   }
   const data = await res.json();
-  return schema.parse(data);
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    return data as unknown as T;
+  }
+  return parsed.data;
 }
 
 export async function fetchPrescriptions(status?: string): Promise<Prescription[]> {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Play, Package, ShoppingBag, QrCode, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Play, ShoppingBag, QrCode, CheckCircle2, ArrowRight } from 'lucide-react';
 import WorkflowStepButton from './WorkflowStepButton';
 import ReserveGuardDialog from './ReserveGuardDialog';
 import VerifyPickupDialog from './VerifyPickupDialog';
@@ -7,15 +7,14 @@ import useWorkflow from '../useWorkflow';
 import { useDispensaryWorkspace } from '../hooks/useDispensaryWorkspace';
 
 export const WorkflowBar: React.FC = () => {
-  const { state, dispatch, handleStepClick } = useWorkflow();
+  const { state, dispatch, handleStepClick, isPending } = useWorkflow();
   const { openReconsultModal } = useDispensaryWorkspace();
 
   const stages = [
-    { label: 'Process Request', icon: Play },
-    { label: 'Reserve Stock', icon: Package },
-    { label: 'Mark Ready', icon: ShoppingBag },
-    { label: 'Verify Pickup', icon: QrCode },
-    { label: 'Complete', icon: CheckCircle2 },
+    { label: 'Process Request', sublabel: 'Reserve Stock', icon: Play },
+    { label: 'Mark Ready', sublabel: 'Notify Patient', icon: ShoppingBag },
+    { label: 'Verify Pickup', sublabel: 'OTP Handover', icon: QrCode },
+    { label: 'Complete', sublabel: 'Deduct & Finish', icon: CheckCircle2 },
   ];
 
   const getStepStatus = (idx: number): 'done' | 'active' | 'upcoming' => {
@@ -35,10 +34,13 @@ export const WorkflowBar: React.FC = () => {
             {stages.map((stage, idx) => (
               <React.Fragment key={stage.label}>
                 <WorkflowStepButton
+                  stepNumber={idx + 1}
                   label={stage.label}
+                  sublabel={stage.sublabel}
                   icon={stage.icon}
                   status={getStepStatus(idx)}
                   onClick={() => handleStepClick(idx)}
+                  isPending={idx === state.activeStepIndex && isPending}
                 />
 
                 {idx < stages.length - 1 && (
@@ -81,7 +83,9 @@ export const WorkflowBar: React.FC = () => {
         expectedOtp={state.verificationOtp}
         errorMessage={state.errorMessage}
         onClose={() => dispatch({ type: 'CLOSE_VERIFY_PICKUP' })}
-        onVerify={(otp) => dispatch({ type: 'VERIFY_OTP', otp })}
+        onVerify={(otp) => {
+          dispatch({ type: 'VERIFY_OTP', otp });
+        }}
       />
     </>
   );
