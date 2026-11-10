@@ -36,6 +36,7 @@ export default function HospitalDashboard() {
   const { name, hospitalId, hospitalCode, clearHospitalAuth, isAuthenticated } = useHospitalAuthStore();
   const navigate = useNavigate();
   const [tab, setTab] = useState<HospTab>('overview');
+  const [visitedTabs, setVisitedTabs] = useState<Set<HospTab>>(() => new Set(['overview']));
   const [sideOpen, setSideOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
@@ -76,6 +77,7 @@ export default function HospitalDashboard() {
   const go = (t: HospTab) => {
     setTab(t);
     setSideOpen(false);
+    setVisitedTabs((prev) => new Set(prev).add(t));
   };
 
   const abbrev = (n: string | null) =>
@@ -283,16 +285,56 @@ export default function HospitalDashboard() {
 
         {/* Viewport content */}
         <div className="hd-viewport" role="region" aria-live="polite">
-          {tab === 'overview'     && <HospOverviewTab />}
-          {tab === 'patients'     && <PatientLookupTab onScanClick={() => setShowScannerModal(true)} />}
-          {tab === 'doctors'      && <DoctorsTab onScanDoctorClick={() => setShowScannerModal(true)} />}
-          {tab === 'appointments' && <AppointmentsTab />}
-          {tab === 'admissions'   && <AdmissionsTab />}
-          {tab === 'departments'  && <DepartmentsTab />}
-          {tab === 'dispensary'   && <DispensaryTab onScanClick={() => setShowScannerModal(true)} />}
-          {tab === 'billing'      && <BillingTab />}
-          {tab === 'reports'      && <ReportsTab />}
-          {tab === 'profile'      && <HospProfileTab />}
+          {visitedTabs.has('overview') && (
+            <div style={{ display: tab === 'overview' ? 'block' : 'none' }}>
+              <HospOverviewTab />
+            </div>
+          )}
+          {visitedTabs.has('patients') && (
+            <div style={{ display: tab === 'patients' ? 'block' : 'none' }}>
+              <PatientLookupTab onScanClick={() => setShowScannerModal(true)} />
+            </div>
+          )}
+          {visitedTabs.has('doctors') && (
+            <div style={{ display: tab === 'doctors' ? 'block' : 'none' }}>
+              <DoctorsTab onScanDoctorClick={() => setShowScannerModal(true)} />
+            </div>
+          )}
+          {visitedTabs.has('appointments') && (
+            <div style={{ display: tab === 'appointments' ? 'block' : 'none' }}>
+              <AppointmentsTab />
+            </div>
+          )}
+          {visitedTabs.has('admissions') && (
+            <div style={{ display: tab === 'admissions' ? 'block' : 'none' }}>
+              <AdmissionsTab />
+            </div>
+          )}
+          {visitedTabs.has('departments') && (
+            <div style={{ display: tab === 'departments' ? 'block' : 'none' }}>
+              <DepartmentsTab />
+            </div>
+          )}
+          {visitedTabs.has('dispensary') && (
+            <div style={{ display: tab === 'dispensary' ? 'block' : 'none' }}>
+              <DispensaryTab onScanClick={() => setShowScannerModal(true)} />
+            </div>
+          )}
+          {visitedTabs.has('billing') && (
+            <div style={{ display: tab === 'billing' ? 'block' : 'none' }}>
+              <BillingTab />
+            </div>
+          )}
+          {visitedTabs.has('reports') && (
+            <div style={{ display: tab === 'reports' ? 'block' : 'none' }}>
+              <ReportsTab />
+            </div>
+          )}
+          {visitedTabs.has('profile') && (
+            <div style={{ display: tab === 'profile' ? 'block' : 'none' }}>
+              <HospProfileTab />
+            </div>
+          )}
         </div>
       </main>
 

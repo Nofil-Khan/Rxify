@@ -13,7 +13,9 @@ const API_BASE =
   (typeof window !== 'undefined' ? '' : 'http://localhost:3000');
 
 export function getAuthHeaders(): HeadersInit {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('rxify_token') : null;
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('rxify_token') || localStorage.getItem('rxify_hospital_token')
+    : null;
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

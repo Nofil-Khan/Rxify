@@ -1,59 +1,95 @@
 @import "tailwindcss";
 
-/* ─── Rxify Design Tokens & Theme Variables ─────────────────────────────── */
+/* ─── Rxify Design Tokens & Theme Variables ─────────────────────────────────── */
 
 :root {
-  /* Dark Forest Backgrounds */
+  /* ── Warm Titanium Palette ─────────────────────────── */
+  --ti-canvas:          #EFECE6;   /* root canvas: warm anodized stone */
+  --ti-canvas-bloom:    #FAF8F5;   /* radial bloom center / sheet bg-from */
+  --ti-sheet-to:        #F4F1EA;   /* sheet bg-to */
+  --ti-ink:             #181816;   /* primary dark text */
+  --ti-ink-muted:       #6B6960;   /* muted labels */
+  --ti-ink-subtle:      #9B9890;   /* whisper text / placeholders */
+  --ti-hairline:        rgba(24, 24, 22, 0.08);   /* 1px grid rules */
+  --ti-hairline-strong: rgba(24, 24, 22, 0.14);   /* header border */
+  --ti-sage:            #4A7C6F;   /* picked / confirmed accent */
+  --ti-sage-light:      rgba(74, 124, 111, 0.12);
+  --ti-amber:           #C47A1E;   /* warn accent */
+  --ti-ruby:            #C0392B;   /* danger accent */
+  --ti-island-bg:       rgba(25, 25, 23, 0.95);   /* Dynamic Island dark anodized */
+  --ti-island-text:     #FAF8F5;
+  --ti-island-border:   rgba(255, 255, 255, 0.08);
+  --ti-pill-bg:         rgba(255, 255, 255, 0.72);  /* floating pill surface */
+  --ti-pill-shadow:     0 8px 24px rgba(24, 24, 22, 0.06), 0 1px 3px rgba(24, 24, 22, 0.04);
+  --shadow-sheet:       0 30px 60px -15px rgba(24, 24, 22, 0.07), inset 0 1px 0 #FFFFFF;
+  --shadow-sheet-lg:    0 40px 80px -20px rgba(24, 24, 22, 0.1), inset 0 1px 0 #FFFFFF;
+
+  /* ── Legacy dark tokens (kept for non-workspace pages) ─── */
+  --bg-canvas-abyssal: #04120D;
+  --bg-canvas-spruce:  #0A2A20;
+  --accent-mint-primary: #10B981;
+  --accent-mint-glow:    #6EE7B7;
+  --semantic-amber-warn: #F59E0B;
+  --semantic-ruby-danger: #EF4444;
   --bg-0: #04120D;
   --bg-1: #0A2A20;
   --bg-2: #0F3A2C;
-
-  /* Mint & Emerald Accents */
   --mint-300: #A7F3D0;
   --mint-400: #6EE7B7;
   --emerald-500: #10B981;
-
-  /* Cream Card Contrast */
   --cream-from: #F8F0E5;
   --cream-to: #EADFCF;
   --cream-gradient: linear-gradient(135deg, var(--cream-from) 0%, var(--cream-to) 100%);
-
-  /* Ink Typography (for cream cards) */
   --ink: #1F2A24;
   --ink-muted: #55685E;
   --ink-subtle: #7E9287;
-
-  /* Status Colors: Success / Warning / Danger */
   --success-bg: rgba(16, 185, 129, 0.14);
   --success-text: #10B981;
   --success-border: rgba(16, 185, 129, 0.28);
-
   --warning-bg: rgba(245, 158, 11, 0.14);
   --warning-text: #F59E0B;
   --warning-border: rgba(245, 158, 11, 0.28);
-
   --danger-bg: rgba(239, 68, 68, 0.14);
   --danger-text: #EF4444;
   --danger-border: rgba(239, 68, 68, 0.28);
-
-  /* Geometry & Radii */
   --radius-panel: 32px;
   --radius-card: 36px;
   --radius-row: 20px;
   --radius-pill: 9999px;
-
-  /* Elevation & Glow Shadows */
   --shadow-glass: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(110, 231, 183, 0.1);
   --shadow-glass-lg: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(167, 243, 208, 0.14);
   --shadow-cream: 0 24px 60px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
   --shadow-glow-mint: 0 0 28px rgba(110, 231, 183, 0.45);
-
-  /* Typography */
   --font-serif: 'Fraunces Variable', Fraunces, Georgia, serif;
   --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 @theme {
+  --font-serif: 'Fraunces Variable', Fraunces, Georgia, serif;
+  --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Warm Titanium colors */
+  --color-ti-canvas:          #EFECE6;
+  --color-ti-bloom:           #FAF8F5;
+  --color-ti-sheet-to:        #F4F1EA;
+  --color-ti-ink:             #181816;
+  --color-ti-ink-muted:       #6B6960;
+  --color-ti-ink-subtle:      #9B9890;
+  --color-ti-sage:            #4A7C6F;
+  --color-ti-amber:           #C47A1E;
+  --color-ti-ruby:            #C0392B;
+  --color-ti-island:          #191917;
+  --color-ti-island-text:     #FAF8F5;
+
+  /* Legacy colors */
+  --color-canvas-abyssal: #04120D;
+  --color-canvas-spruce:  #0A2A20;
+  --color-accent-mint:    #10B981;
+  --color-mint-glow:      #6EE7B7;
+  --color-amber-warn:     #F59E0B;
+  --color-ruby-danger:    #EF4444;
   --color-bg-0: #04120D;
   --color-bg-1: #0A2A20;
   --color-bg-2: #0F3A2C;
@@ -65,24 +101,15 @@
   --color-ink: #1F2A24;
   --color-ink-muted: #55685E;
   --color-ink-subtle: #7E9287;
-
-  --color-success-bg: rgba(16, 185, 129, 0.14);
   --color-success-text: #10B981;
-  --color-warning-bg: rgba(245, 158, 11, 0.14);
   --color-warning-text: #F59E0B;
-  --color-danger-bg: rgba(239, 68, 68, 0.14);
   --color-danger-text: #EF4444;
-
   --radius-panel: 32px;
   --radius-card: 36px;
   --radius-row: 20px;
   --radius-pill: 9999px;
-
   --shadow-glass: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(110, 231, 183, 0.1);
   --shadow-glass-lg: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(167, 243, 208, 0.14);
   --shadow-cream: 0 24px 60px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
   --shadow-glow-mint: 0 0 28px rgba(110, 231, 183, 0.45);
-
-  --font-serif: 'Fraunces Variable', Fraunces, Georgia, serif;
-  --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
 }

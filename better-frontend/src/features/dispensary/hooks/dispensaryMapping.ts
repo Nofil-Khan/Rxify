@@ -25,6 +25,7 @@ export function mapDetailToWorkspace(d: RequestDetail, invMap: Map<number, Inven
     const inStock = inv ? inv.available_quantity : (item.availability_status === 'AVAILABLE' ? Math.max(item.required_quantity * 3, 25) : 0);
     return {
       id: String(item.item_id),
+      medicineId: item.medicine_id ?? undefined,
       name: item.generic_name || item.prescribed_medicine_name || 'Medicine',
       strength: item.strength || '500 mg',
       form: normalizeForm(item.form),
@@ -43,16 +44,29 @@ export function mapDetailToWorkspace(d: RequestDetail, invMap: Map<number, Inven
     .slice(0, 2)
     .join('') || 'PT';
 
+  let calculatedAge = 28;
+  if (d.patient_dob) {
+    const dob = new Date(d.patient_dob);
+    if (!isNaN(dob.getTime())) {
+      const diff = Date.now() - dob.getTime();
+      calculatedAge = Math.max(1, Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)));
+    }
+  }
+
+  const rawGender = ((d as unknown as { patient_gender?: string }).patient_gender || '').toLowerCase();
+  const gender: 'Male' | 'Female' | 'Other' =
+    rawGender === 'female' || rawGender === 'f' ? 'Female' : (rawGender === 'male' || rawGender === 'm' ? 'Male' : 'Other');
+
   return {
     id: String(d.request_id),
     rxNumber: d.prescription_id ? `RX-2026-${d.prescription_id}` : `REQ-${d.request_id}`,
     patientName: d.patient_name || 'Patient',
     patientInitials: initials,
-    patientAge: 28,
-    patientGender: 'Male',
+    patientAge: calculatedAge,
+    patientGender: gender,
     date: new Date(d.created_at || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    doctorName: d.doctor_name || 'Dr. N. Verma',
-    doctorSpecialty: d.doctor_specialty || 'General Medicine',
+    doctorName: d.doctor_name || 'Attending Physician',
+    doctorSpecialty: d.doctor_specialty || 'Clinical Practice',
     diagnosis: d.diagnosis || 'Prescribed Therapy',
     notes: d.prescription_notes || d.notes || 'Take as prescribed.',
     status: (d.status?.toUpperCase() as RequestStatus) || 'PENDING',
@@ -61,6 +75,8 @@ export function mapDetailToWorkspace(d: RequestDetail, invMap: Map<number, Inven
     priority: d.status === 'PENDING' ? 'URGENT' : 'NORMAL',
     medicines,
     hasAlert: medicines.some((m) => m.status === 'UNAVAILABLE' || m.status === 'PARTIAL'),
+    pickupCode: d.pickup_code || undefined,
   };
 }
+
 

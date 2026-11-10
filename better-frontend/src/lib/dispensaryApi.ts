@@ -412,8 +412,17 @@ export function fetchDispensaryDashboardStats(): Promise<DispensaryDashboardStat
 
 /** GET /api/dispensary/alerts */
 
+export interface DispensaryAlertItem {
+  id?: number | string;
+  type?: string;
+  message?: string;
+  severity?: 'info' | 'warning' | 'critical';
+  created_at?: string;
+  [key: string]: unknown;
+}
+
 export function fetchDispensaryAlerts(): Promise<{
-  alerts: any[];
+  alerts: DispensaryAlertItem[];
   total_alerts: number;
 }> {
   return req("/api/dispensary/alerts");
@@ -465,8 +474,18 @@ export function fetchDispensaryAnalytics(days: number = 30): Promise<DispensaryA
 
 /** POST /api/dispensary/inventory/bulk */
 
+export interface BulkStockItem {
+  medicine_id?: number;
+  name?: string;
+  quantity: number;
+  unit?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  [key: string]: unknown;
+}
+
 export function bulkAddStock(
-  items: any[],
+  items: BulkStockItem[],
 ): Promise<{ message: string; updated_count: number }> {
   return req("/api/dispensary/inventory/bulk", {
     method: "POST",

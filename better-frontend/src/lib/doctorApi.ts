@@ -277,6 +277,52 @@ export async function getDoctorStats(): Promise<DoctorStats> {
   }
 }
 
+interface RawPatientRecord {
+  id?: number;
+  patient_id?: number;
+  username?: string;
+  patient_username?: string;
+  display_name?: string | null;
+  patient_display_name?: string | null;
+  patient_name?: string | null;
+  assigned_at?: string;
+  prescription_count?: number;
+  primary_diagnosis?: string;
+}
+
+interface RawPrescriptionRecord {
+  id?: number;
+  patient_user_id?: number;
+  patient_id?: number;
+  user_id?: number;
+  patient_name?: string;
+  uploaded_by?: string;
+  diagnosis?: string;
+  doctor_name?: string;
+  clinic_name?: string;
+  issue_date?: string;
+  created_at?: string;
+  follow_up_date?: string | null;
+  status?: string;
+  medications?: MedicineDetail[];
+  medicines_count?: number;
+  medicines?: MedicineDetail[];
+  raw_text?: string;
+}
+
+interface RawRequestRecord {
+  id?: number;
+  patient_id?: number;
+  user_id?: number;
+  patient_display_name?: string;
+  patient_username?: string;
+  patient_name?: string;
+  username?: string;
+  requested_at?: string;
+  created_at?: string;
+  note?: string;
+}
+
 export async function getMyPatients(): Promise<PatientItem[]> {
   try {
     const res = await fetch(`${BASE_URL}/api/doctor/my-patients`, {
@@ -284,9 +330,9 @@ export async function getMyPatients(): Promise<PatientItem[]> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rawList = data.patients ?? data ?? [];
+    const rawList: RawPatientRecord[] = data.patients ?? data ?? [];
     if (!Array.isArray(rawList)) return MOCK_PATIENTS;
-    return rawList.map((pt: any) => ({
+    return rawList.map((pt) => ({
       id: pt.id ?? pt.patient_id ?? 0,
       username: pt.username ?? pt.patient_username ?? 'patient',
       display_name: pt.display_name ?? pt.patient_display_name ?? pt.patient_name ?? null,
@@ -307,8 +353,8 @@ export async function getDoctorPrescriptions(search?: string): Promise<{ total: 
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rawList = data.prescriptions ?? (Array.isArray(data) ? data : []);
-    const normalized = rawList.map((p: any) => ({
+    const rawList: RawPrescriptionRecord[] = data.prescriptions ?? (Array.isArray(data) ? data : []);
+    const normalized = rawList.map((p) => ({
       id: p.id ?? 0,
       patient_id: p.patient_user_id ?? p.patient_id ?? p.user_id ?? 0,
       patient_name: p.patient_name ?? p.uploaded_by ?? 'Patient Record',
@@ -374,8 +420,8 @@ export async function getPatientPrescriptions(userId: number): Promise<Prescript
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rawList = data.prescriptions ?? (Array.isArray(data) ? data : []);
-    return rawList.map((p: any) => ({
+    const rawList: RawPrescriptionRecord[] = data.prescriptions ?? (Array.isArray(data) ? data : []);
+    return rawList.map((p) => ({
       id: p.id ?? 0,
       patient_id: userId,
       patient_name: p.patient_name ?? p.uploaded_by ?? 'Patient Record',
@@ -400,8 +446,8 @@ export async function getPendingRequests(): Promise<ConnectionRequest[]> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rawList = data.requests ?? (Array.isArray(data) ? data : []);
-    return rawList.map((r: any) => ({
+    const rawList: RawRequestRecord[] = data.requests ?? (Array.isArray(data) ? data : []);
+    return rawList.map((r) => ({
       id: r.id ?? 0,
       patient_id: r.patient_id ?? r.user_id ?? 0,
       patient_name: r.patient_display_name || r.patient_username || r.patient_name || 'New Patient',

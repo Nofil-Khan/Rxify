@@ -25,9 +25,17 @@ export const ReserveGuardDialog: React.FC<ReserveGuardDialogProps> = ({
   onSubstitute,
   onNotifyDoctor,
 }) => {
+  const [substituteName, setSubstituteName] = React.useState('');
   const unavailableMeds = (prescription?.medicines || []).filter(
     (m) => m.inStockQuantity === 0 || m.status === 'UNAVAILABLE'
   );
+  const target = unavailableMeds[0];
+
+  const handleSubstitute = () => {
+    if (!target) return;
+    const name = substituteName.trim() || `${target.name} (Equivalent)`;
+    onSubstitute(target.id, name);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
@@ -68,26 +76,35 @@ export const ReserveGuardDialog: React.FC<ReserveGuardDialogProps> = ({
           </p>
 
           {/* Action Resolution Buttons */}
-          <div className="grid grid-cols-1 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                const target = unavailableMeds[0];
-                if (target) onSubstitute(target.id, 'Omeprazole 40mg');
-              }}
-              className="flex items-center gap-3 rounded-xl bg-bg-0/80 p-3 border border-mint-400/20 hover:border-mint-400/50 hover:bg-bg-0 text-left transition-all focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
-            >
-              <ArrowLeftRight className="h-4 w-4 text-mint-300 shrink-0" />
-              <div>
-                <span className="font-bold text-white block">Substitute Equivalent</span>
-                <span className="text-[11px] text-emerald-200/60">Auto-swap with approved Omeprazole 40mg</span>
+          <div className="space-y-2 pt-1">
+            <div className="rounded-xl bg-bg-0/80 p-3 border border-mint-400/20 space-y-2">
+              <div className="flex items-center gap-2 text-mint-300">
+                <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                <span className="font-bold text-white text-xs">Substitute Equivalent</span>
               </div>
-            </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={substituteName}
+                  onChange={(e) => setSubstituteName(e.target.value)}
+                  placeholder={`Alternative for ${target?.name || 'item'}...`}
+                  className="flex-1 rounded-lg border border-mint-400/30 bg-bg-1 px-2.5 py-1.5 text-xs text-white placeholder-emerald-200/40 focus-visible:ring-1 focus-visible:ring-mint-400 focus-visible:outline-none"
+                  aria-label="Substitute medication name"
+                />
+                <button
+                  type="button"
+                  onClick={handleSubstitute}
+                  className="rounded-lg bg-mint-400 px-3 py-1.5 text-xs font-bold text-bg-0 hover:bg-mint-300 focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
+                >
+                  Swap
+                </button>
+              </div>
+            </div>
 
             <button
               type="button"
               onClick={onPartialReserve}
-              className="flex items-center gap-3 rounded-xl bg-bg-0/80 p-3 border border-amber-500/30 hover:border-amber-400/60 hover:bg-bg-0 text-left transition-all focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
+              className="w-full flex items-center gap-3 rounded-xl bg-bg-0/80 p-3 border border-amber-500/30 hover:border-amber-400/60 hover:bg-bg-0 text-left transition-all focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
             >
               <PackageCheck className="h-4 w-4 text-amber-400 shrink-0" />
               <div>
@@ -102,7 +119,7 @@ export const ReserveGuardDialog: React.FC<ReserveGuardDialogProps> = ({
                 onClose();
                 onNotifyDoctor();
               }}
-              className="flex items-center gap-3 rounded-xl bg-bg-0/80 p-3 border border-purple-500/30 hover:border-purple-400/60 hover:bg-bg-0 text-left transition-all focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
+              className="w-full flex items-center gap-3 rounded-xl bg-bg-0/80 p-3 border border-purple-500/30 hover:border-purple-400/60 hover:bg-bg-0 text-left transition-all focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
             >
               <Stethoscope className="h-4 w-4 text-purple-400 shrink-0" />
               <div>

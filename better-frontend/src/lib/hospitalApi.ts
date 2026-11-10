@@ -1,9 +1,11 @@
 /* ─── Rxify Hospital API Client ─────────────────────────────────────────────── */
 
+import { getAuthToken } from './api';
+
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
 function hHeaders(): Record<string, string> {
-  const t = localStorage.getItem('rxify_hospital_token');
+  const t = getAuthToken('hospital');
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
@@ -15,6 +17,9 @@ async function go<T>(res: Response): Promise<T> {
       detail = j.detail ?? detail;
     } catch {
       /* */
+    }
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rxify-auth-unauthorized', { detail: { status: 401, message: detail } }));
     }
     throw new Error(detail);
   }
@@ -152,7 +157,16 @@ export async function fetchHospitalDoctors(): Promise<{ total: number; doctors: 
   return go(res);
 }
 
-export async function affiliateDoctorToHospital(doctorId: number | string, department?: string): Promise<any> {
+export interface HospitalAffiliationResult {
+  success: boolean;
+  message?: string;
+  doctor_id?: number | string;
+}
+
+export async function affiliateDoctorToHospital(
+  doctorId: number | string,
+  department?: string
+): Promise<HospitalAffiliationResult> {
   const res = await fetch(`${BASE}/api/hospital/doctors`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...hHeaders() },
@@ -161,7 +175,7 @@ export async function affiliateDoctorToHospital(doctorId: number | string, depar
   return go(res);
 }
 
-export async function removeDoctorAffiliation(doctorId: number): Promise<any> {
+export async function removeDoctorAffiliation(doctorId: number): Promise<HospitalAffiliationResult> {
   const res = await fetch(`${BASE}/api/hospital/doctors/${doctorId}`, {
     method: 'DELETE',
     headers: hHeaders(),

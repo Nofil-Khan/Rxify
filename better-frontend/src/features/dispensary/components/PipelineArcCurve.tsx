@@ -12,11 +12,11 @@ export const PipelineArcCurve: React.FC = () => {
     >
       <defs>
         <linearGradient id="arcGlowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#6EE7B7" stopOpacity="0" />
-          <stop offset="15%" stopColor="#A7F3D0" stopOpacity="0.35" />
-          <stop offset="50%" stopColor="#6EE7B7" stopOpacity="0.8" />
-          <stop offset="85%" stopColor="#A7F3D0" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#6EE7B7" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--mint-400)" stopOpacity="0" />
+          <stop offset="15%" stopColor="var(--mint-300)" stopOpacity="0.35" />
+          <stop offset="50%" stopColor="var(--mint-400)" stopOpacity="0.8" />
+          <stop offset="85%" stopColor="var(--mint-300)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--mint-400)" stopOpacity="0" />
         </linearGradient>
         <filter id="arcGlowBlur" x="-20%" y="-40%" width="140%" height="180%">
           <feGaussianBlur stdDeviation="5" />
@@ -45,9 +45,9 @@ export const PipelineArcCurve: React.FC = () => {
       />
 
       {/* Pulsing Glowing Dots along the arc between nodes */}
-      <circle cx="140" cy="56" r="2" fill="#A7F3D0" className="animate-pulse opacity-75" />
-      <circle cx="320" cy="38" r="2.5" fill="#6EE7B7" className="animate-pulse opacity-90 shadow-glow-mint" />
-      <circle cx="500" cy="56" r="2" fill="#A7F3D0" className="animate-pulse opacity-75" />
+      <circle cx="140" cy="56" r="2" fill="var(--mint-300)" className="animate-pulse opacity-75" />
+      <circle cx="320" cy="38" r="2.5" fill="var(--mint-400)" className="animate-pulse opacity-90 shadow-glow-mint" />
+      <circle cx="500" cy="56" r="2" fill="var(--mint-300)" className="animate-pulse opacity-75" />
     </svg>
   );
 };

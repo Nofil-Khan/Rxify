@@ -14,7 +14,7 @@ export interface QrScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   role: 'patient' | 'doctor' | 'hospital' | 'dispensary';
-  onSuccessAction?: (actionType: string, payload: any) => void;
+  onSuccessAction?: (actionType: string, payload: unknown) => void;
 }
 
 type ScanMode = 'camera' | 'upload' | 'manual';
@@ -35,7 +35,7 @@ export default function QrScannerModal({
 
   /* Scanned / Matched Result State */
   const [detectedPayload, setDetectedPayload] = useState<ParsedQrPayload | null>(null);
-  const [resolvedData, setResolvedData] = useState<any | null>(null);
+  const [resolvedData, setResolvedData] = useState<{ type: string; data: Record<string, any> } | null>(null);
   const [resolving, setResolving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -97,10 +97,11 @@ export default function QrScannerModal({
           // ignore frame errors
         }
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('Camera start error:', err);
       setIsScanning(false);
-      setCameraError(err?.message || 'Unable to access camera. Please allow camera permissions or upload an image.');
+      const msg = err instanceof Error ? err.message : 'Unable to access camera. Please allow camera permissions or upload an image.';
+      setCameraError(msg);
     }
   };
 
@@ -136,7 +137,7 @@ export default function QrScannerModal({
       const decodedText = await html5QrCode.scanFile(file, true);
       html5QrCode.clear();
       handleCodeDetected(decodedText);
-    } catch (err: any) {
+    } catch {
       setActionError('Could not find a valid QR code in this image. Try another photo or enter code manually.');
     }
   };
@@ -187,8 +188,9 @@ export default function QrScannerModal({
       else {
         setResolvedData({ type: 'generic', data: payload });
       }
-    } catch (err: any) {
-      setActionError(err?.message || `Could not resolve data for ${payload.label}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : `Could not resolve data for ${payload.label}`;
+      setActionError(msg);
     } finally {
       setResolving(false);
     }
@@ -241,8 +243,9 @@ export default function QrScannerModal({
         window.open(`/share/${detectedPayload.id}`, '_blank');
         onClose();
       }
-    } catch (err: any) {
-      setActionError(err?.message || 'Failed to complete connection.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to complete connection.';
+      setActionError(msg);
     } finally {
       setActionLoading(false);
     }

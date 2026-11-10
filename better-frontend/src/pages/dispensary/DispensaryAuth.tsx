@@ -94,8 +94,9 @@ export default function DispensaryAuth() {
         displayName: res.name,
       });
       navigate({ to: '/dispensary' });
-    } catch (err: any) {
-      setLoginError(err?.message ?? 'Login failed. Please check your email and password.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Login failed. Please check your email and password.';
+      setLoginError(msg);
     } finally {
       setLoginLoading(false);
     }
@@ -152,8 +153,9 @@ export default function DispensaryAuth() {
         setTab('login');
         setRegSuccess('');
       }, 1800);
-    } catch (err: any) {
-      setRegError(err?.message ?? 'Registration failed. Check if this email is already in use.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed. Check if this email is already in use.';
+      setRegError(msg);
     } finally {
       setRegLoading(false);
     }

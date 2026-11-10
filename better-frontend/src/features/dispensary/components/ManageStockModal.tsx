@@ -1,27 +1,76 @@
 import * as React from 'react';
-import { X, Plus, Minus, Check } from 'lucide-react';
+import { X, Check, Loader2, PackageCheck } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispensaryWorkspace } from '../hooks/useDispensaryWorkspace';
+import { updateStockPartial, addOrUpdateStock } from '@/lib/dispensaryApi';
+import { StockInputControls } from './StockInputControls';
 
 export const ManageStockModal: React.FC = () => {
-  const { isManageStockModalOpen, closeManageStockModal, prescriptions, selectedPrescriptionId, selectedMedicineId } =
-    useDispensaryWorkspace();
+  const {
+    isManageStockModalOpen,
+    closeManageStockModal,
+    managingStockTarget,
+    prescriptions,
+    selectedPrescriptionId,
+    selectedMedicineId,
+  } = useDispensaryWorkspace();
 
-  const med = React.useMemo(() => {
+  const queryClient = useQueryClient();
+
+  const activeTarget = React.useMemo(() => {
+    if (managingStockTarget) return managingStockTarget;
     const rx = prescriptions.find((p) => p.id === selectedPrescriptionId) ?? prescriptions[0];
-    return rx?.medicines.find((m) => m.id === selectedMedicineId) ?? rx?.medicines[0];
-  }, [prescriptions, selectedPrescriptionId, selectedMedicineId]);
+    const med = rx?.medicines.find((m) => m.id === selectedMedicineId) ?? rx?.medicines[0];
+    if (!med) return null;
+    return {
+      medicineId: med.medicineId ?? med.id,
+      name: med.name,
+      strength: med.strength,
+      form: med.form,
+      availableQuantity: med.inStockQuantity,
+      reorderLevel: 10,
+      unit: 'units',
+      inventoryId: undefined as number | undefined,
+    };
+  }, [managingStockTarget, prescriptions, selectedPrescriptionId, selectedMedicineId]);
 
   const [stock, setStock] = React.useState<number>(0);
   const [reorder, setReorder] = React.useState<number>(10);
 
   React.useEffect(() => {
-    if (med) {
-      setStock(med.inStockQuantity);
-      setReorder(med.reorderLevel ?? 10);
+    if (activeTarget) {
+      setStock(activeTarget.availableQuantity);
+      setReorder(activeTarget.reorderLevel ?? 10);
     }
-  }, [med]);
+  }, [activeTarget]);
 
-  if (!isManageStockModalOpen || !med) return null;
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTarget) return;
+      if (activeTarget.inventoryId) {
+        await updateStockPartial(activeTarget.inventoryId, {
+          available_quantity: stock,
+          reorder_level: reorder,
+          unit: activeTarget.unit || 'units',
+        });
+      } else if (activeTarget.medicineId) {
+        await addOrUpdateStock({
+          medicine_id: Number(activeTarget.medicineId),
+          available_quantity: stock,
+          reorder_level: reorder,
+          unit: activeTarget.unit || 'units',
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dispensary_inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
+      closeManageStockModal();
+    },
+  });
+
+  if (!isManageStockModalOpen || !activeTarget) return null;
 
   return (
     <div
@@ -32,84 +81,54 @@ export const ManageStockModal: React.FC = () => {
     >
       <div className="w-full max-w-sm rounded-3xl border border-mint-400/30 bg-bg-1 p-6 text-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-mint-400/15 pb-3">
-          <div>
-            <h3 id="manage-stock-title" className="font-serif text-base font-bold text-white">
-              Manage Inventory Stock
-            </h3>
-            <p className="text-xs text-emerald-200/70">{med.name} · {med.strength}</p>
+          <div className="flex items-center gap-2">
+            <PackageCheck className="h-4 w-4 text-mint-300" />
+            <div>
+              <h3 id="manage-stock-title" className="font-serif text-base font-bold text-white">
+                Adjust Medicine Stock
+              </h3>
+              <p className="text-xs text-emerald-200/70 truncate max-w-[220px]">
+                {activeTarget.name} {activeTarget.strength ? `· ${activeTarget.strength}` : ''}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={closeManageStockModal}
-            className="rounded-full p-1 text-emerald-200/60 hover:text-white"
+            className="rounded-full p-1 text-emerald-200/60 hover:text-white focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none"
             aria-label="Close dialog"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="my-5 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-emerald-200/80 mb-2">
-              Available Units in Dispensary Shelf
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setStock((s) => Math.max(0, s - 5))}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg-0 border border-mint-400/20 text-white hover:bg-bg-2"
-                aria-label="Decrease stock by 5"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <input
-                type="number"
-                value={stock}
-                onChange={(e) => setStock(Number(e.target.value))}
-                className="flex-1 rounded-xl border border-mint-400/25 bg-bg-0/60 px-3 py-2 text-center text-sm font-bold text-white"
-              />
-              <button
-                type="button"
-                onClick={() => setStock((s) => s + 5)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg-0 border border-mint-400/20 text-white hover:bg-bg-2"
-                aria-label="Increase stock by 5"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-emerald-200/80 mb-1">
-              Low Stock Reorder Threshold
-            </label>
-            <input
-              type="number"
-              value={reorder}
-              onChange={(e) => setReorder(Number(e.target.value))}
-              className="w-full rounded-xl border border-mint-400/25 bg-bg-0/60 px-3 py-2 text-xs text-white"
-            />
-          </div>
-        </div>
+        <StockInputControls
+          stock={stock}
+          reorder={reorder}
+          onStockChange={setStock}
+          onReorderChange={setReorder}
+        />
 
         <div className="flex justify-end gap-2.5 border-t border-mint-400/15 pt-3">
           <button
             type="button"
             onClick={closeManageStockModal}
-            className="rounded-xl px-4 py-2 text-xs font-medium text-emerald-200/70 hover:text-white"
+            className="rounded-xl px-4 py-2 text-xs font-medium text-emerald-200/70 hover:text-white cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={() => {
-              med.inStockQuantity = stock;
-              med.reorderLevel = reorder;
-              closeManageStockModal();
-            }}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-bg-0 shadow-glow-mint hover:bg-emerald-400"
+            disabled={updateMutation.isPending}
+            onClick={() => updateMutation.mutate()}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-bg-0 shadow-glow-mint hover:bg-emerald-400 focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer disabled:opacity-75"
           >
-            <Check className="h-3.5 w-3.5" /> Update Stock
+            {updateMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span>Update Database</span>
           </button>
         </div>
       </div>
@@ -118,4 +137,3 @@ export const ManageStockModal: React.FC = () => {
 };
 
 export default ManageStockModal;
-

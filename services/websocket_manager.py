@@ -38,17 +38,58 @@ logger = logging.getLogger("dispensary.websocket")
 
 
 class DispensaryConnectionManager:
-    """Manages active WebSocket connections grouped by dispensary_id."""
+    """Manages active WebSocket connections grouped by dispensary_id with cross-worker sync."""
 
     def __init__(self) -> None:
         # Maps dispensary_id -> Set of active WebSocket instances
         self._active_connections: Dict[int, Set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._pg_listener_started = False
 
     def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Store reference to running event loop for threadsafe cross-thread broadcasts."""
+        """Store reference to running event loop and spawn background multi-worker listener."""
         self._loop = loop
+        if not self._pg_listener_started:
+            self._pg_listener_started = True
+            self._start_pg_listener()
+
+    def _start_pg_listener(self) -> None:
+        """Spawn background listener thread for cross-worker events via PostgreSQL LISTEN/NOTIFY."""
+        import threading
+        t = threading.Thread(target=self._pg_listener_worker, daemon=True, name="rxify-pg-ws-listener")
+        t.start()
+
+    def _pg_listener_worker(self) -> None:
+        """Worker thread listening on rxify_dispensary_events channel."""
+        import select
+        try:
+            from database.db import get_pool
+            pool = get_pool()
+            conn = pool.getconn()
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                cur.execute("LISTEN rxify_dispensary_events;")
+            while True:
+                if select.select([conn], [], [], 5) == ([], [], []):
+                    pass
+                else:
+                    conn.poll()
+                    while conn.notifies:
+                        notify = conn.notifies.pop(0)
+                        try:
+                            data = json.loads(notify.payload)
+                            disp_id = data.get("dispensary_id")
+                            body = data.get("payload")
+                            if disp_id and body and self._loop and self._loop.is_running():
+                                asyncio.run_coroutine_threadsafe(
+                                    self.broadcast_to_dispensary(disp_id, body),
+                                    self._loop,
+                                )
+                        except Exception as e:
+                            logger.debug(f"[WS] Failed parsing notify payload: {e}")
+        except Exception as exc:
+            logger.debug(f"[WS] PG listener inactive (standalone/mock mode): {exc}")
 
     async def connect(self, websocket: WebSocket, dispensary_id: int) -> None:
         """Accept incoming WebSocket and register it under the dispensary tenant."""
@@ -90,11 +131,8 @@ class DispensaryConnectionManager:
                     self._active_connections[dispensary_id].discard(dead_ws)
 
     def notify_dispensary_sync(self, dispensary_id: int, payload: Dict[str, Any]) -> None:
-        """Thread-safe synchronous bridge.
-
-        Call this from synchronous service functions (e.g. database transactions
-        running in worker threads) to schedule a WebSocket broadcast on the async event loop.
-        """
+        """Thread-safe synchronous bridge with cross-worker PostgreSQL pub/sub broadcast."""
+        # 1. Local broadcast
         try:
             loop = self._loop or asyncio.get_event_loop()
             if loop.is_running():
@@ -105,11 +143,23 @@ class DispensaryConnectionManager:
             else:
                 loop.run_until_complete(self.broadcast_to_dispensary(dispensary_id, payload))
         except Exception as exc:
-            logger.debug(f"[WS] Non-fatal broadcast dispatch error: {exc}")
+            logger.debug(f"[WS] Local broadcast dispatch: {exc}")
+
+        # 2. Cross-worker broadcast via PostgreSQL NOTIFY
+        try:
+            from database.db import get_conn
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    message_text = json.dumps({"dispensary_id": dispensary_id, "payload": payload})
+                    cur.execute("SELECT pg_notify('rxify_dispensary_events', %s);", (message_text,))
+        except Exception as exc:
+            logger.debug(f"[WS] Cross-process PG notify notice: {exc}")
 
 
 # Global Singleton Manager
 dispensary_ws_manager = DispensaryConnectionManager()
+manager = dispensary_ws_manager
+
 
 
 def verify_ws_token(token: Optional[str], expected_dispensary_id: int) -> bool:

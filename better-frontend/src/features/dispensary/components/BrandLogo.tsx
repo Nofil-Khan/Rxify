@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link } from '@tanstack/react-router';
 
 export const BrandLogo: React.FC = () => {
   return (
-    <NavLink
+    <Link
       to="/workspace"
       className="group flex items-center gap-3 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-400 rounded-xl"
       aria-label="Rxify Home Workspace"
@@ -22,16 +22,16 @@ export const BrandLogo: React.FC = () => {
           {/* Leaf outline and spine */}
           <path
             d="M3 21C3 21 5.5 13 13 11C20.5 9 21 3 21 3C21 3 15 3.5 13 11C11 18.5 3 21 3 21Z"
-            stroke="var(--mint-400, #6EE7B7)"
+            stroke="var(--mint-400)"
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
-            fill="var(--mint-300, #A7F3D0)"
+            fill="var(--mint-300)"
             fillOpacity="0.2"
           />
           <path
             d="M13 11L7 17"
-            stroke="var(--mint-400, #6EE7B7)"
+            stroke="var(--mint-400)"
             strokeWidth="1.5"
             strokeLinecap="round"
           />
@@ -43,16 +43,16 @@ export const BrandLogo: React.FC = () => {
             height="14"
             rx="4"
             transform="rotate(45 10.5 4.5)"
-            stroke="var(--mint-300, #A7F3D0)"
+            stroke="var(--mint-300)"
             strokeWidth="1.75"
-            fill="var(--bg-1, #0A2A20)"
+            fill="var(--bg-1)"
           />
           <line
             x1="8"
             y1="13.5"
             x2="14"
             y2="7.5"
-            stroke="var(--mint-400, #6EE7B7)"
+            stroke="var(--mint-400)"
             strokeWidth="1.2"
           />
         </svg>
@@ -62,7 +62,7 @@ export const BrandLogo: React.FC = () => {
       <span className="font-serif text-[32px] font-bold tracking-tight text-cream-from leading-none">
         Rxify
       </span>
-    </NavLink>
+    </Link>
   );
 };
 

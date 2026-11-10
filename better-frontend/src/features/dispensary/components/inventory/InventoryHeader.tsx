@@ -1,77 +1,167 @@
 import * as React from 'react';
-import { Search, Plus, AlertTriangle, Layers } from 'lucide-react';
+import { Search, Plus, AlertTriangle } from 'lucide-react';
+import { motion } from 'motion/react';
+
+type Filter = 'all' | 'low' | 'out' | 'expiring';
 
 interface Props {
   search: string;
-  onSearchChange: (val: string) => void;
-  selectedCategory: string;
-  onCategoryChange: (cat: string) => void;
-  lowStockOnly: boolean;
-  onLowStockToggle: () => void;
-  onAddStockClick: () => void;
-  totalItems: number;
-  lowStockCount: number;
+  onSearchChange: (v: string) => void;
+  activeFilter: Filter;
+  onFilterChange: (f: Filter) => void;
+  onAddStock: () => void;
+  totalSKU: number;
+  lowCount: number;
+  outCount: number;
 }
 
-export const InventoryHeader: React.FC<Props> = ({
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'low', label: 'Low Stock' },
+  { id: 'out', label: 'Out of Stock' },
+];
+
+/** Warm-titanium inventory header with KPI callouts + filter pills. */
+const InventoryHeader: React.FC<Props> = ({
   search,
   onSearchChange,
-  lowStockOnly,
-  onLowStockToggle,
-  onAddStockClick,
-  totalItems,
-  lowStockCount,
-}) => {
-  return (
-    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pb-4 border-b border-mint-400/15">
-      <div className="flex items-center gap-3">
-        {/* Search bar */}
-        <div className="relative flex-1 md:w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-cream-to/50" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search medicine by name or brand..."
-            className="w-full rounded-full border border-mint-400/20 bg-bg-0/60 pl-10 pr-4 py-2 text-xs text-cream-from placeholder:text-cream-to/40 focus:border-mint-400 focus:outline-none focus:ring-1 focus:ring-mint-400 transition-all"
-            aria-label="Search inventory"
-          />
-        </div>
-
-        {/* Low Stock Toggle Chip */}
-        <button
-          type="button"
-          onClick={onLowStockToggle}
-          className={`glass-chip text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
-            lowStockOnly
-              ? 'border-amber-400/80 bg-amber-500/20 text-amber-200'
-              : 'text-cream-to/70 hover:text-cream-from hover:border-mint-400/40'
-          }`}
-          aria-pressed={lowStockOnly}
+  activeFilter,
+  onFilterChange,
+  onAddStock,
+  totalSKU,
+  lowCount,
+  outCount,
+}) => (
+  <div className="flex flex-col gap-5">
+    {/* KPI Callouts */}
+    <div className="flex items-end gap-10">
+      <div>
+        <span
+          className="ti-display-num block"
+          style={{ fontSize: 'clamp(2.2rem, 4vw, 3.2rem)', color: 'var(--ti-ink)' }}
         >
-          <AlertTriangle size={13} className={lowStockOnly ? 'text-amber-400' : 'text-cream-to/50'} />
-          <span>Low Stock ({lowStockCount})</span>
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3 justify-end">
-        <span className="glass-chip text-xs text-cream-to/60 hidden sm:flex items-center gap-1">
-          <Layers size={13} /> {totalItems} Medicines Tracked
+          {totalSKU}
         </span>
-
-        {/* Add Stock Action */}
-        <button
-          type="button"
-          onClick={onAddStockClick}
-          className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-bg-0 bg-gradient-to-r from-mint-300 via-mint-400 to-emerald-400 shadow-glow-mint hover:brightness-110 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-400"
+        <span className="ti-spec-label text-[11px]">TOTAL SKUs</span>
+      </div>
+      <div>
+        <span
+          className="ti-display-num block"
+          style={{ fontSize: 'clamp(2.2rem, 4vw, 3.2rem)', color: 'var(--ti-amber)' }}
         >
-          <Plus size={16} strokeWidth={2.2} />
-          <span>Add Stock</span>
-        </button>
+          {lowCount}
+        </span>
+        <span className="ti-spec-label text-[11px]">LOW STOCK</span>
+      </div>
+      <div>
+        <span
+          className="ti-display-num block"
+          style={{ fontSize: 'clamp(2.2rem, 4vw, 3.2rem)', color: 'var(--ti-ruby)' }}
+        >
+          {outCount}
+        </span>
+        <span className="ti-spec-label text-[11px]">OUT OF STOCK</span>
       </div>
     </div>
-  );
-};
+
+    {/* Alert strip */}
+    {lowCount > 0 && (
+      <div
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px]"
+        style={{
+          border: '1px solid rgba(196,122,30,0.3)',
+          background: 'rgba(196,122,30,0.06)',
+          color: 'var(--ti-amber)',
+        }}
+      >
+        <AlertTriangle size={13} />
+        <span>
+          <strong>{lowCount}</strong> medicine{lowCount > 1 ? 's' : ''} at or below reorder level.
+          Review stock health cards below.
+        </span>
+      </div>
+    )}
+
+    {/* Search + filter row */}
+    <div className="flex items-center gap-3 flex-wrap">
+      {/* Search */}
+      <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <Search
+          size={14}
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ color: 'var(--ti-ink-muted)' }}
+        />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search medicine, brand, category…"
+          aria-label="Search inventory"
+          className="w-full h-9 rounded-full pl-9 pr-4 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ti-sage"
+          style={{
+            background: 'rgba(255,255,255,0.72)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.9)',
+            boxShadow: '0 4px 12px rgba(24,24,22,0.05)',
+            color: 'var(--ti-ink)',
+          }}
+        />
+      </div>
+
+      {/* Filter pills with layoutId indicator */}
+      <div
+        className="flex items-center gap-1 p-1 rounded-full"
+        style={{ background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(24,24,22,0.07)' }}
+        role="tablist"
+        aria-label="Inventory filter"
+      >
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            role="tab"
+            aria-selected={activeFilter === f.id}
+            onClick={() => onFilterChange(f.id)}
+            className="relative px-3 py-1 rounded-full text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ti-sage"
+            style={{
+              color: activeFilter === f.id ? 'var(--ti-ink)' : 'var(--ti-ink-muted)',
+              zIndex: 1,
+            }}
+          >
+            {activeFilter === f.id && (
+              <motion.span
+                layoutId="inv-filter-pill"
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'white',
+                  boxShadow: '0 2px 8px rgba(24,24,22,0.08)',
+                  zIndex: -1,
+                }}
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              />
+            )}
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Add Stock */}
+      <button
+        type="button"
+        onClick={onAddStock}
+        aria-label="Add new stock"
+        className="ml-auto flex items-center gap-1.5 h-9 px-4 rounded-full text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ti-sage"
+        style={{
+          background: 'var(--ti-sage)',
+          color: 'white',
+          boxShadow: '0 4px 16px rgba(74,124,111,0.25)',
+        }}
+      >
+        <Plus size={14} strokeWidth={2.5} />
+        Add Stock
+      </button>
+    </div>
+  </div>
+);
 
 export default InventoryHeader;
-

@@ -1,23 +1,52 @@
 import * as React from 'react';
-import { X, Send } from 'lucide-react';
+import { X, Send, Loader2 } from 'lucide-react';
 import { useDispensaryWorkspace } from '../hooks/useDispensaryWorkspace';
+import { reconsultDoctorCommand } from '../api';
 
 export const ReconsultationModal: React.FC = () => {
-  const { isReconsultModalOpen, closeReconsultModal, reconsultingMedicine, updateMedicineDecision } =
-    useDispensaryWorkspace();
+  const {
+    isReconsultModalOpen,
+    closeReconsultModal,
+    reconsultingMedicine,
+    selectedPrescriptionId,
+    updateMedicineDecision,
+  } = useDispensaryWorkspace();
 
   const [reason, setReason] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   if (!isReconsultModalOpen || !reconsultingMedicine) return null;
 
-  const handleSubmit = () => {
-    updateMedicineDecision(
-      reconsultingMedicine.id,
-      'RECONSULTATION_NEEDED',
-      0,
-      `Doctor Reconsultation Flagged: ${reason}`
-    );
-    closeReconsultModal();
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      if (selectedPrescriptionId) {
+        await reconsultDoctorCommand(
+          selectedPrescriptionId,
+          `Clarification for ${reconsultingMedicine.name}: ${reason || 'Prescription clarification needed'}`,
+          false,
+          'CLINICAL_CLARIFICATION_NEEDED'
+        );
+      }
+      updateMedicineDecision(
+        reconsultingMedicine.id,
+        'RECONSULTATION_NEEDED',
+        0,
+        `Doctor Reconsultation Flagged: ${reason}`
+      );
+      closeReconsultModal();
+    } catch (err) {
+      console.error('Failed to notify doctor:', err);
+      updateMedicineDecision(
+        reconsultingMedicine.id,
+        'RECONSULTATION_NEEDED',
+        0,
+        `Doctor Reconsultation Flagged: ${reason}`
+      );
+      closeReconsultModal();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,10 +98,12 @@ export const ReconsultationModal: React.FC = () => {
           </button>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={handleSubmit}
-            className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-purple-500"
+            className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-purple-500 disabled:opacity-50 cursor-pointer"
           >
-            <Send className="h-3.5 w-3.5" /> Flag to Doctor
+            {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {isSubmitting ? 'Flagging...' : 'Flag to Doctor'}
           </button>
         </div>
       </div>

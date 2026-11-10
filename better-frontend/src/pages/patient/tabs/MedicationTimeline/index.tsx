@@ -79,8 +79,9 @@ export default function MedicationTimeline() {
         }
         setActiveIndex(defaultIdx);
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load prescription timeline from server.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load prescription timeline from server.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

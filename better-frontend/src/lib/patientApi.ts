@@ -386,7 +386,7 @@ export function updateMedicationStatus(
   status: 'ACTIVE' | 'DISCONTINUED' | 'COMPLETED',
   endDate?: string,
   notes?: string,
-): Promise<{ success: boolean; message: string; medication: any }> {
+): Promise<{ success: boolean; message: string; medication: Record<string, unknown> }> {
   return req(`/api/patient/current-medications/${currentMedicationId}/status`, {
     method: 'PATCH',
     body: JSON.stringify({

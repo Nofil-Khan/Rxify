@@ -31,12 +31,12 @@ export const StockGauge: React.FC<StockGaugeProps> = ({ inStock, reorderLevel })
         >
           <defs>
             <linearGradient id="mintArcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#A7F3D0" />
-              <stop offset="100%" stopColor="#10B981" />
+              <stop offset="0%" stopColor="var(--mint-300, #A7F3D0)" />
+              <stop offset="100%" stopColor="var(--mint-400, #10B981)" />
             </linearGradient>
             <linearGradient id="amberArcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FCD34D" />
-              <stop offset="100%" stopColor="#F59E0B" />
+              <stop offset="0%" stopColor="var(--amber-300, #FCD34D)" />
+              <stop offset="100%" stopColor="var(--amber-400, #F59E0B)" />
             </linearGradient>
           </defs>
 

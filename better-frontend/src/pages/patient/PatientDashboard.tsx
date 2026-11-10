@@ -36,6 +36,7 @@ export default function PatientDashboard() {
   const { username, displayName, patientCode, patientId, updateProfileData, clearAuth, isAuthenticated, role } = useAuthStore();
   const navigate = useNavigate();
   const [tab, setTab]         = useState<DashTab>('overview');
+  const [visitedTabs, setVisitedTabs] = useState<Set<DashTab>>(() => new Set(['overview']));
   const [dark, setDark]       = useState(() => localStorage.getItem('rxify-theme') === 'dark');
   const [sideOpen, setSideOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -96,12 +97,14 @@ export default function PatientDashboard() {
   const switchTab = (t: DashTab) => {
     setTab(t);
     setSideOpen(false);
+    setVisitedTabs((prev) => new Set(prev).add(t));
   };
 
   /* ── Cross-tab communication listener ── */
   useEffect(() => {
-    const handler = (e: any) => {
-      if (e.detail?.tab) switchTab(e.detail.tab);
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab?: DashTab }>;
+      if (customEvent.detail?.tab) switchTab(customEvent.detail.tab);
     };
     window.addEventListener('rxify-switch-tab', handler);
     return () => window.removeEventListener('rxify-switch-tab', handler);
@@ -255,13 +258,41 @@ export default function PatientDashboard() {
 
         {/* Page content */}
         <div className="pd-content" role="region" aria-live="polite">
-          {tab === 'overview'      && <Overview      onUploadClick={() => switchTab('upload')} onViewAllClick={() => switchTab('prescriptions')} onTimelineClick={() => switchTab('timeline')} />}
-          {tab === 'prescriptions' && <MyPrescriptions />}
-          {tab === 'timeline'      && <MedicationTimeline />}
-          {tab === 'dispensary'    && <DispensaryTab />}
-          {tab === 'doctor'        && <MyDoctor />}
-          {tab === 'messages'      && <PatientMessagesTab />}
-          {tab === 'upload'        && <UploadTab />}
+          {visitedTabs.has('overview') && (
+            <div style={{ display: tab === 'overview' ? 'block' : 'none' }}>
+              <Overview onUploadClick={() => switchTab('upload')} onViewAllClick={() => switchTab('prescriptions')} onTimelineClick={() => switchTab('timeline')} />
+            </div>
+          )}
+          {visitedTabs.has('prescriptions') && (
+            <div style={{ display: tab === 'prescriptions' ? 'block' : 'none' }}>
+              <MyPrescriptions />
+            </div>
+          )}
+          {visitedTabs.has('timeline') && (
+            <div style={{ display: tab === 'timeline' ? 'block' : 'none' }}>
+              <MedicationTimeline />
+            </div>
+          )}
+          {visitedTabs.has('dispensary') && (
+            <div style={{ display: tab === 'dispensary' ? 'block' : 'none' }}>
+              <DispensaryTab />
+            </div>
+          )}
+          {visitedTabs.has('doctor') && (
+            <div style={{ display: tab === 'doctor' ? 'block' : 'none' }}>
+              <MyDoctor />
+            </div>
+          )}
+          {visitedTabs.has('messages') && (
+            <div style={{ display: tab === 'messages' ? 'block' : 'none' }}>
+              <PatientMessagesTab />
+            </div>
+          )}
+          {visitedTabs.has('upload') && (
+            <div style={{ display: tab === 'upload' ? 'block' : 'none' }}>
+              <UploadTab />
+            </div>
+          )}
         </div>
       </main>
 

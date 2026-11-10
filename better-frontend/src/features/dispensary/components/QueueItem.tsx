@@ -13,10 +13,10 @@ interface QueueItemProps {
 
 function getAvatarBackground(initials: string): string {
   const tones = [
-    'bg-[#062c20] text-mint-300 border-mint-400/30',
-    'bg-[#093526] text-teal-300 border-teal-400/30',
-    'bg-[#04281c] text-emerald-300 border-emerald-400/30',
-    'bg-[#0b3d2c] text-mint-400 border-mint-400/30',
+    'bg-bg-1 text-mint-300 border-mint-400/30',
+    'bg-bg-2 text-teal-300 border-teal-400/30',
+    'bg-bg-0 text-emerald-300 border-emerald-400/30',
+    'bg-forest text-mint-400 border-mint-400/30',
   ];
   const charCode = (initials.charCodeAt(0) || 0) + (initials.charCodeAt(1) || 0);
   return tones[charCode % tones.length];

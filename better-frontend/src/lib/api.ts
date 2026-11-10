@@ -41,6 +41,9 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore
     }
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rxify-auth-unauthorized', { detail: { status: 401, message: detail } }));
+    }
     throw new ApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
@@ -71,8 +74,17 @@ export async function register(
   return handleResponse<RegisterResponse>(res);
 }
 
+/** Helper: get active authentication token with multi-role fallback */
+export function getAuthToken(role?: string): string | null {
+  if (typeof window === 'undefined') return null;
+  if (role === 'hospital') {
+    return localStorage.getItem('rxify_hospital_token') || localStorage.getItem('rxify_token');
+  }
+  return localStorage.getItem('rxify_token') || localStorage.getItem('rxify_hospital_token');
+}
+
 /** Helper: attach the stored Bearer token to any request */
-export function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('rxify_token');
+export function authHeaders(role?: string): Record<string, string> {
+  const token = getAuthToken(role);
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

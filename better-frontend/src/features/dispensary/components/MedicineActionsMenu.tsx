@@ -22,7 +22,7 @@ interface MedicineActionsMenuProps {
 }
 
 export const MedicineActionsMenu: React.FC<MedicineActionsMenuProps> = ({ medicine }) => {
-  const { openAdjustModal, openReconsultModal } = useDispensaryWorkspace();
+  const { openAdjustModal, openReconsultModal, openManageStockModal } = useDispensaryWorkspace();
 
   return (
     <div onClick={(e) => e.stopPropagation()}>
@@ -47,9 +47,22 @@ export const MedicineActionsMenu: React.FC<MedicineActionsMenuProps> = ({ medici
             <ArrowLeftRight className="h-3.5 w-3.5 text-emerald-600" />
             <span>Substitute Medicine</span>
           </DropdownMenuItem>
-          <DropdownMenuItem className="flex items-center gap-2.5 text-xs text-ink hover:bg-emerald-50 hover:text-emerald-800 rounded-xl px-2.5 py-2 cursor-pointer font-medium">
+          <DropdownMenuItem
+            onClick={() =>
+              openManageStockModal({
+                medicineId: medicine.id,
+                name: medicine.name,
+                strength: medicine.strength,
+                form: medicine.form,
+                availableQuantity: medicine.inStockQuantity,
+                reorderLevel: 10,
+                unit: 'units',
+              })
+            }
+            className="flex items-center gap-2.5 text-xs text-ink hover:bg-emerald-50 hover:text-emerald-800 rounded-xl px-2.5 py-2 cursor-pointer font-medium"
+          >
             <PackageCheck className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Reserve Stock</span>
+            <span>Manage Stock</span>
           </DropdownMenuItem>
           <DropdownMenuItem className="flex items-center gap-2.5 text-xs text-ink hover:bg-emerald-50 hover:text-emerald-800 rounded-xl px-2.5 py-2 cursor-pointer font-medium">
             <Layers className="h-3.5 w-3.5 text-emerald-600" />

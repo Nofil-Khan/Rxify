@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from '@tanstack/react-router';
 import { LayoutGrid, ClipboardList, FileText, TrendingUp } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -28,7 +28,7 @@ export const NavTabs: React.FC = () => {
           (item.to === '/workspace' && location.pathname === '/dispensary');
 
         return (
-          <NavLink
+          <Link
             key={item.name}
             to={item.to}
             className={`group relative flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-400 ${
@@ -54,7 +54,7 @@ export const NavTabs: React.FC = () => {
               <Icon size={18} strokeWidth={1.75} className={isActive ? 'text-mint-300' : 'text-cream-to/60 group-hover:text-cream-from'} />
               <span>{item.name}</span>
             </span>
-          </NavLink>
+          </Link>
         );
       })}
     </nav>

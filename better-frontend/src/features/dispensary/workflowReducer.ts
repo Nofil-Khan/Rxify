@@ -3,20 +3,15 @@ import { WorkspacePrescription, PipelineStats } from './types';
 
 export function deriveStage(rx?: WorkspacePrescription | null): WorkflowStage {
   if (!rx) return 'NEW';
+  if (rx.status === 'CANCELLED' || rx.status === 'RECONSULTATION_NEEDED') return 'CANCELLED';
   if (rx.status === 'DISPENSED') return 'COMPLETED';
   if (rx.status === 'READY') return 'READY';
-  if (rx.status === 'PROCESSING') return 'PREPARING';
+  if (rx.status === 'PROCESSING' || rx.status === 'CONFIRMED') return 'PREPARING';
   return 'NEW';
 }
 
 export function getActiveStepIndex(stage: WorkflowStage): number {
-  const map: Record<WorkflowStage, number> = {
-    NEW: 0,
-    PREPARING: 1,
-    READY: 2,
-    READY_VERIFIED: 3,
-    COMPLETED: 4,
-  };
+  const map: Record<WorkflowStage, number> = { NEW: 0, PREPARING: 1, READY: 2, READY_VERIFIED: 3, COMPLETED: 4, CANCELLED: -1 };
   return map[stage] ?? 0;
 }
 
@@ -26,20 +21,8 @@ export function createInitialWorkflowState(
 ): WorkflowState {
   const stage = deriveStage(prescription);
   const fallbackRx: WorkspacePrescription = prescription || {
-    id: '',
-    rxNumber: '',
-    patientName: '',
-    patientInitials: '',
-    patientAge: 0,
-    patientGender: 'Male',
-    date: '',
-    doctorName: '',
-    doctorSpecialty: '',
-    diagnosis: '',
-    notes: '',
-    status: 'PENDING',
-    timeAgo: '',
-    medicines: [],
+    id: '', rxNumber: '', patientName: '', patientInitials: '', patientAge: 0, patientGender: 'Male',
+    date: '', doctorName: '', doctorSpecialty: '', diagnosis: '', notes: '', status: 'PENDING', timeAgo: '', medicines: [],
   };
   return {
     prescription: fallbackRx,
@@ -48,7 +31,7 @@ export function createInitialWorkflowState(
     activeStepIndex: getActiveStepIndex(stage),
     isReserveGuardOpen: false,
     isVerifyPickupOpen: false,
-    verificationOtp: '749201',
+    verificationOtp: prescription?.pickupCode || '',
     errorMessage: null,
   };
 }
@@ -124,7 +107,18 @@ export function workflowReducer(state: WorkflowState, action: WorkflowAction): W
       return { ...prev, isReserveGuardOpen: false };
 
     case 'SUBSTITUTE_UNAVAILABLE':
-      return { ...prev, isReserveGuardOpen: false };
+      return {
+        ...prev,
+        isReserveGuardOpen: false,
+        prescription: {
+          ...state.prescription,
+          medicines: state.prescription.medicines.map((m) =>
+            m.id === action.medicineId
+              ? { ...m, name: action.substituteName, status: 'AVAILABLE', inStockQuantity: m.prescribedQuantity }
+              : m
+          ),
+        },
+      };
 
     case 'ROLLBACK':
       return state.previousState ? { ...state.previousState } : state;

@@ -13,7 +13,7 @@ interface NodeData {
   r: number;
   label?: string;
   category: 'core' | 'processor' | 'entity' | 'signal';
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string; size?: number | string }>;
 }
 
 interface EdgeData {

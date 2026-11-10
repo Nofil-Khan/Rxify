@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Play, ShoppingBag, QrCode, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Play, ShoppingBag, QrCode, CheckCircle2, ArrowRight, AlertCircle } from 'lucide-react';
 import WorkflowStepButton from './WorkflowStepButton';
 import ReserveGuardDialog from './ReserveGuardDialog';
 import VerifyPickupDialog from './VerifyPickupDialog';
@@ -22,6 +22,26 @@ export const WorkflowBar: React.FC = () => {
     if (idx === state.activeStepIndex) return 'active';
     return 'upcoming';
   };
+
+  if (state.stage === 'CANCELLED' || state.prescription?.status === 'CANCELLED') {
+    return (
+      <footer
+        className="sticky bottom-0 lg:relative z-30 w-full shrink-0 px-3 lg:px-14 pb-3 lg:pb-5 pt-1.5 bg-bg-0/90 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-t border-red-500/15 lg:border-t-0"
+        data-testid="slot-workflow-bar"
+      >
+        <div className="mx-auto flex h-16 w-full max-w-[1150px] items-center justify-between rounded-2xl lg:rounded-[32px] border border-red-500/30 bg-red-950/40 px-6 backdrop-blur-2xl shadow-glass-lg">
+          <div className="flex items-center gap-2.5 text-xs text-red-200">
+            <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+            <span className="font-semibold text-white">This prescription ticket was cancelled.</span>
+            <span className="text-red-200/70 hidden sm:inline">No stock deduction or dispensing action is required.</span>
+          </div>
+          <span className="rounded-full bg-red-500/20 border border-red-500/30 px-3 py-1 text-xs font-bold text-red-300">
+            Cancelled
+          </span>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <>
@@ -59,7 +79,6 @@ export const WorkflowBar: React.FC = () => {
         </div>
       </footer>
 
-      {/* Unavailable Stock Reservation Guard Dialog */}
       <ReserveGuardDialog
         open={state.isReserveGuardOpen}
         prescription={state.prescription}
@@ -76,7 +95,6 @@ export const WorkflowBar: React.FC = () => {
         }}
       />
 
-      {/* Verify Patient Pickup Dialog with QR Code and OTP input */}
       <VerifyPickupDialog
         open={state.isVerifyPickupOpen}
         prescription={state.prescription}

@@ -34,6 +34,7 @@ export default function DoctorDashboard() {
   const { username, displayName, doctorId, doctorCode, updateProfileData, clearAuth, isAuthenticated, role } = useAuthStore();
   const navigate = useNavigate();
   const [tab, setTab]         = useState<DoctorTab>('overview');
+  const [visitedTabs, setVisitedTabs] = useState<Set<DoctorTab>>(() => new Set(['overview']));
   const [dark, setDark]       = useState(() => localStorage.getItem('rxify-theme') === 'dark');
   const [sideOpen, setSideOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -94,6 +95,7 @@ export default function DoctorDashboard() {
   const switchTab = (t: DoctorTab) => {
     setTab(t);
     setSideOpen(false);
+    setVisitedTabs((prev) => new Set(prev).add(t));
   };
 
   const initials = getInitials(username || 'Doctor');
@@ -248,13 +250,41 @@ export default function DoctorDashboard() {
 
         {/* Tab Viewport */}
         <div className="dd-content" role="region" aria-live="polite">
-          {tab === 'overview'      && <OverviewTab onNavigateTab={(t) => setTab(t as DoctorTab)} />}
-          {tab === 'patients'      && <MyPatientsTab />}
-          {tab === 'appointments'  && <AppointmentsTab />}
-          {tab === 'messages'      && <DoctorMessagesTab />}
-          {tab === 'prescriptions' && <PrescriptionsTab />}
-          {tab === 'requests'      && <RequestsTab />}
-          {tab === 'profile'       && <DoctorProfileTab />}
+          {visitedTabs.has('overview') && (
+            <div style={{ display: tab === 'overview' ? 'block' : 'none' }}>
+              <OverviewTab onNavigateTab={(t) => switchTab(t as DoctorTab)} />
+            </div>
+          )}
+          {visitedTabs.has('patients') && (
+            <div style={{ display: tab === 'patients' ? 'block' : 'none' }}>
+              <MyPatientsTab />
+            </div>
+          )}
+          {visitedTabs.has('appointments') && (
+            <div style={{ display: tab === 'appointments' ? 'block' : 'none' }}>
+              <AppointmentsTab />
+            </div>
+          )}
+          {visitedTabs.has('messages') && (
+            <div style={{ display: tab === 'messages' ? 'block' : 'none' }}>
+              <DoctorMessagesTab />
+            </div>
+          )}
+          {visitedTabs.has('prescriptions') && (
+            <div style={{ display: tab === 'prescriptions' ? 'block' : 'none' }}>
+              <PrescriptionsTab />
+            </div>
+          )}
+          {visitedTabs.has('requests') && (
+            <div style={{ display: tab === 'requests' ? 'block' : 'none' }}>
+              <RequestsTab />
+            </div>
+          )}
+          {visitedTabs.has('profile') && (
+            <div style={{ display: tab === 'profile' ? 'block' : 'none' }}>
+              <DoctorProfileTab />
+            </div>
+          )}
         </div>
       </main>
 

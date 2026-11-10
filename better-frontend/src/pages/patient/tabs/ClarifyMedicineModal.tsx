@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Search, CheckCircle, AlertTriangle, HelpCircle, ChevronRight, Loader2 } from 'lucide-react';
 import {
   fetchMedicineCandidates,
@@ -98,8 +98,9 @@ export default function ClarifyMedicineModal({ prescriptionId, medicine, onResol
       const res = await resolvePrescriptionMedicine(prescriptionId, medicine.id, candidate.medicine_id);
       setSuccessName(candidate.brand_name ?? candidate.generic_name ?? 'Medicine');
       setTimeout(() => { onResolved(res.medicine); onClose(); }, 900);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to save. Please try again.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to save. Please try again.';
+      setError(msg);
       setSelecting(false);
     }
   }, [prescriptionId, medicine.id, onResolved, onClose]);

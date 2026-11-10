@@ -1,135 +1,123 @@
 import * as React from 'react';
-import { useLocation } from 'react-router-dom';
-import { motion, useReducedMotion } from 'motion/react';
-import SceneBackground from '@/features/dispensary/components/SceneBackground';
+import { useLocation } from '@tanstack/react-router';
 import TopNav from '@/features/dispensary/components/TopNav';
-import Hero from '@/features/dispensary/components/Hero';
-import PipelineArc from '@/features/dispensary/components/PipelineArc';
-import QueuePanel from '@/features/dispensary/components/QueuePanel';
-import PrescriptionCard from '@/features/dispensary/components/PrescriptionCard';
-import StockPanel from '@/features/dispensary/components/StockPanel';
-import WorkflowBar from '@/features/dispensary/components/WorkflowBar';
-import AriaLiveRegion from '@/features/dispensary/components/AriaLiveRegion';
-import AdjustFulfillmentModal from '@/features/dispensary/components/AdjustFulfillmentModal';
-import ReconsultationModal from '@/features/dispensary/components/ReconsultationModal';
-import ViewPrescriptionDialog from '@/features/dispensary/components/ViewPrescriptionDialog';
-import ManageStockModal from '@/features/dispensary/components/ManageStockModal';
-import { useBackendDispensarySync } from '@/features/dispensary/hooks/useBackendDispensarySync';
+import InflowQueuePanel from '@/features/dispensary/components/InflowQueuePanel';
+import PrescriptionSlipSheet from '@/features/dispensary/components/PrescriptionSlipSheet';
+import TelemetryHud from '@/features/dispensary/components/TelemetryHud';
+import DynamicPrescriptionIsland from '@/features/dispensary/components/DynamicPrescriptionIsland';
+import DoctorQueryModal from '@/features/dispensary/components/DoctorQueryModal';
 import InventoryView from '@/features/dispensary/components/inventory/InventoryView';
 import OrdersView from '@/features/dispensary/components/orders/OrdersView';
 import AnalyticsView from '@/features/dispensary/components/analytics/AnalyticsView';
+import SettingsView from '@/features/dispensary/components/settings/SettingsView';
+import AddMedicineModal from '@/features/dispensary/components/AddMedicineModal';
+import ManageStockModal from '@/features/dispensary/components/ManageStockModal';
+import { useBackendDispensarySync } from '@/features/dispensary/hooks/useBackendDispensarySync';
+
+/** Which sub-view is active based on current URL pathname. */
+function useActiveView() {
+  const location = useLocation();
+  const path = location.pathname;
+  if (path === '/inventory') return 'inventory';
+  if (path === '/orders') return 'orders';
+  if (path === '/analytics') return 'analytics';
+  if (path === '/settings') return 'settings';
+  return 'workspace'; // /dispensary or /workspace
+}
 
 export const Workspace: React.FC = () => {
   useBackendDispensarySync();
-  const shouldReduceMotion = useReducedMotion();
-  const location = useLocation();
+  const activeView = useActiveView();
 
-  const isInventory = location.pathname.startsWith('/inventory');
-  const isOrders = location.pathname.startsWith('/orders');
-  const isAnalytics = location.pathname.startsWith('/analytics');
-  const isSubView = isInventory || isOrders || isAnalytics;
+  const [isDoctorModalOpen, setIsDoctorModalOpen] = React.useState(false);
+  const [forceOpenVerify, setForceOpenVerify] = React.useState(false);
+  const [triggerSubstituteIndex, setTriggerSubstituteIndex] = React.useState<number | null>(null);
+
+  const handleTriggerVerify = () => setForceOpenVerify(true);
+  const handleTriggerSubstitute = () => {
+    setTriggerSubstituteIndex(0);
+    setTimeout(() => setTriggerSubstituteIndex(null), 2500);
+  };
 
   return (
-    <div className={`relative flex min-h-screen w-full flex-col justify-between overflow-x-hidden text-white select-none ${isSubView ? 'overflow-y-auto' : 'lg:h-[100dvh] lg:overflow-hidden'}`}>
-      {/* Screen Reader Live Status Region */}
-      <AriaLiveRegion />
+    <div
+      className="relative h-screen w-screen overflow-hidden select-none flex flex-col"
+      style={{ background: 'var(--ti-canvas, #EFECE6)', color: 'var(--ti-ink, #181816)' }}
+    >
+      {/* SVG Noise Grain Overlay */}
+      <div className="ti-noise-overlay" aria-hidden="true" />
 
-      {/* Layered Botanical Background Scene & Animated Ambient Props */}
-      <SceneBackground />
+      {/* Radial Ambient Bloom */}
+      <div className="ti-bloom" aria-hidden="true" />
 
-      {/* Top Header & Navigation Bar */}
-      <motion.div
-        initial={shouldReduceMotion ? false : { opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
-        className="w-full shrink-0 z-30"
-      >
-        <TopNav />
-      </motion.div>
+      {/* Top Command Ribbon (always visible) */}
+      <div className="relative z-20 shrink-0">
+        <TopNav
+          onOpenDoctorModal={() => setIsDoctorModalOpen(true)}
+          onTriggerVerify={handleTriggerVerify}
+          onTriggerSubstitute={handleTriggerSubstitute}
+        />
+      </div>
 
-      {/* Render Subview if on /inventory, /orders, or /analytics */}
-      {isInventory ? (
-        <main className="relative z-20 flex-1 px-4 lg:px-14 py-6 min-h-0">
-          <InventoryView />
-        </main>
-      ) : isOrders ? (
-        <main className="relative z-20 flex-1 px-4 lg:px-14 py-6 min-h-0">
-          <OrdersView />
-        </main>
-      ) : isAnalytics ? (
-        <main className="relative z-20 flex-1 px-4 lg:px-14 py-6 min-h-0">
-          <AnalyticsView />
-        </main>
-      ) : (
+      {/* Main content area */}
+      {activeView === 'workspace' ? (
         <>
-          {/* Subheader: Hero Banner & Pipeline Tracker Arc */}
-          <motion.section
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.08, ease: 'easeOut' }}
-            className="relative z-20 w-full shrink-0 px-6 lg:px-14 pt-2 pb-2"
-            aria-label="Dispensary Overview"
-          >
-            <div className="mx-auto dispensary-overview-bar">
-              <Hero />
-              <PipelineArc />
-            </div>
-          </motion.section>
+          {/* Crosshair decorators */}
+          <div
+            className="ti-crosshair"
+            style={{ position: 'absolute', top: 56, left: 310, zIndex: 10 }}
+            aria-hidden="true"
+          />
+          <div
+            className="ti-crosshair"
+            style={{ position: 'absolute', top: 56, right: 340, zIndex: 10 }}
+            aria-hidden="true"
+          />
 
-          {/* Main 3-Column 3D Perspective Workspace Grid */}
+          {/* 3-Column Spatial Grid */}
           <main
-            className="relative z-20 flex-1 px-4 lg:px-14 py-2 min-h-0 flex items-stretch lg:items-center"
-            style={{ perspective: '1600px' }}
+            className="relative z-10 flex-1 min-h-0 overflow-hidden"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '310px minmax(520px, 1fr) 340px',
+              gap: 0,
+            }}
+            aria-label="Dispensary workspace"
           >
-            <div className="mx-auto dispensary-grid">
-              {/* Left Panel: Prescriptions Queue (Tilted Left 3.5deg, stagger 0.14s) */}
-              <motion.div
-                initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, delay: 0.14, ease: 'easeOut' }}
-                className="h-[520px] lg:h-full"
-              >
-                <QueuePanel />
-              </motion.div>
-
-              {/* Center Card: Cream Prescription Detail Card (stagger 0.20s) */}
-              <motion.div
-                initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, delay: 0.2, ease: 'easeOut' }}
-                className="h-auto lg:h-full"
-              >
-                <PrescriptionCard />
-              </motion.div>
-
-              {/* Right Panel: Stock & Dispense Inventory (Tilted Right -3.5deg, stagger 0.26s) */}
-              <motion.div
-                initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, delay: 0.26, ease: 'easeOut' }}
-                className="h-[520px] lg:h-full"
-              >
-                <StockPanel />
-              </motion.div>
+            <InflowQueuePanel />
+            <div className="flex flex-col h-full overflow-hidden">
+              <PrescriptionSlipSheet
+                onOpenDoctorModal={() => setIsDoctorModalOpen(true)}
+                triggerSubstituteItemIndex={triggerSubstituteIndex}
+              />
             </div>
+            <TelemetryHud />
           </main>
 
-          {/* Bottom Floating Action Workflow Bar (stagger 0.32s) */}
-          <motion.div
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.32, ease: 'easeOut' }}
-            className="w-full shrink-0 z-30"
-          >
-            <WorkflowBar />
-          </motion.div>
+          {/* Dynamic Island & Doctor Modal */}
+          <DynamicPrescriptionIsland
+            forceOpenVerify={forceOpenVerify}
+            onCloseVerify={() => setForceOpenVerify(false)}
+          />
+          <DoctorQueryModal
+            open={isDoctorModalOpen}
+            onClose={() => setIsDoctorModalOpen(false)}
+          />
         </>
+      ) : (
+        /* Scrollable sub-page canvas */
+        <main
+          className="relative z-10 flex-1 min-h-0 overflow-y-auto px-10 pt-10"
+          aria-label={`Dispensary ${activeView}`}
+        >
+          {activeView === 'inventory' && <InventoryView />}
+          {activeView === 'orders' && <OrdersView />}
+          {activeView === 'analytics' && <AnalyticsView />}
+          {activeView === 'settings' && <SettingsView />}
+        </main>
       )}
-
-      {/* Dialogs and Modals */}
-      <AdjustFulfillmentModal />
-      <ReconsultationModal />
-      <ViewPrescriptionDialog />
+      {/* Global modals — available on ALL routes */}
+      <AddMedicineModal />
       <ManageStockModal />
     </div>
   );

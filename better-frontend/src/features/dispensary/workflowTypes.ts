@@ -5,7 +5,8 @@ export type WorkflowStage =
   | 'PREPARING'
   | 'READY'
   | 'READY_VERIFIED'
-  | 'COMPLETED';
+  | 'COMPLETED'
+  | 'CANCELLED';
 
 export type WorkflowStepId =
   | 'process'

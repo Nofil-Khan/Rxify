@@ -376,8 +376,9 @@ export default function DispensaryTab() {
       const res = await fetchMyDispensaryRequests();
       setRequests(res.requests || []);
       setError('');
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to load dispensary requests.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load dispensary requests.';
+      setError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -400,8 +401,9 @@ export default function DispensaryTab() {
       setCancelNotice('Pickup ticket cancelled successfully. You are now free to select another dispensary.');
       setTimeout(() => setCancelNotice(null), 5000);
       await loadData(true);
-    } catch (err: any) {
-      alert(err?.message || 'Failed to cancel request');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to cancel request';
+      alert(msg);
     } finally {
       setCancellingId(null);
     }

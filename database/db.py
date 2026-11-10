@@ -684,60 +684,44 @@ def get_password_hash(password: str) -> str:
 # ---------------------------------------------------------------------------
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    """Fetch a user by email (login key). Returns None if not found."""
-    with get_conn() as conn:
-        with get_cursor(conn) as cur:
-            cur.execute(
-                """
-                SELECT u.user_id AS id,
-                       u.email   AS username,
-                       u.password_hash,
-                       u.role,
-                       u.full_name AS display_name,
-                       u.status,
-                       p.patient_id,
-                       p.patient_code,
-                       d.doctor_id,
-                       d.specialization AS specialty,
-                       disp.dispensary_id
-                FROM   users u
-                LEFT JOIN patient p ON p.user_id = u.user_id
-                LEFT JOIN doctor  d ON d.user_id = u.user_id
-                LEFT JOIN dispensary disp ON disp.email = u.email
-                WHERE  u.email = %s
-                """,
-                (email,),
-            )
-            row = cur.fetchone()
-            return dict(row) if row else None
+    """Fetch a user by email (login key). Delegates to UserRepository."""
+    from services.auth.repository import default_user_repo
+    user = default_user_repo.get_by_email(email)
+    if not user:
+        return None
+    return {
+        "id": user.user_id,
+        "username": user.email,
+        "password_hash": user.password_hash,
+        "role": user.role,
+        "display_name": user.display_name,
+        "status": user.status,
+        "patient_id": user.patient_id,
+        "patient_code": user.patient_code,
+        "doctor_id": user.doctor_id,
+        "specialty": user.doctor_specialty,
+        "dispensary_id": user.dispensary_id,
+    }
 
 
 def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
-    """Fetch a user by numeric user_id. Returns None if not found."""
-    with get_conn() as conn:
-        with get_cursor(conn) as cur:
-            cur.execute(
-                """
-                SELECT u.user_id AS id,
-                       u.email   AS username,
-                       u.role,
-                       u.full_name AS display_name,
-                       u.status,
-                       p.patient_id,
-                       p.patient_code,
-                       d.doctor_id,
-                       d.specialization AS specialty,
-                       disp.dispensary_id
-                FROM   users u
-                LEFT JOIN patient p ON p.user_id = u.user_id
-                LEFT JOIN doctor  d ON d.user_id = u.user_id
-                LEFT JOIN dispensary disp ON disp.email = u.email
-                WHERE  u.user_id = %s
-                """,
-                (user_id,),
-            )
-            row = cur.fetchone()
-            return dict(row) if row else None
+    """Fetch a user by numeric user_id. Delegates to UserRepository."""
+    from services.auth.repository import default_user_repo
+    user = default_user_repo.get_by_id(user_id)
+    if not user:
+        return None
+    return {
+        "id": user.user_id,
+        "username": user.email,
+        "role": user.role,
+        "display_name": user.display_name,
+        "status": user.status,
+        "patient_id": user.patient_id,
+        "patient_code": user.patient_code,
+        "doctor_id": user.doctor_id,
+        "specialty": user.doctor_specialty,
+        "dispensary_id": user.dispensary_id,
+    }
 
 
 def create_user(

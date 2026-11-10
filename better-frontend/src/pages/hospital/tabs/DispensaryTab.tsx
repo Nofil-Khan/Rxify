@@ -23,8 +23,9 @@ export default function DispensaryTab({ onScanClick }: DispensaryTabProps) {
     try {
       const res = await fetchHospitalDispensaries();
       setDispensaries(res.dispensaries || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load affiliated dispensaries.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load affiliated dispensaries.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

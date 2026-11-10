@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Pill, ChevronDown, ChevronUp, Search, AlertCircle,
   Calendar, Stethoscope, Building2, CheckCircle2, AlertTriangle,
@@ -169,7 +169,7 @@ export function PrescriptionDetailView({ rxId, onBack }: { rxId: number; onBack:
     setLoading(true);
     fetchPrescriptionDetail(rxId)
       .then((d) => { detailCache.set(rxId, d); setDetail(d); })
-      .catch((e: any) => setErr(e?.message ?? 'Failed to load prescription.'))
+      .catch((e: unknown) => setErr(e instanceof Error ? e.message : 'Failed to load prescription.'))
       .finally(() => setLoading(false));
   }, [rxId]);
 

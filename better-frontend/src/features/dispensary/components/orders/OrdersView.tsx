@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@tanstack/react-router';
 import { fetchDispensaryQueue, QueueItemSummary } from '@/lib/dispensaryApi';
 import OrdersFilterBar from './OrdersFilterBar';
 import OrdersList from './OrdersList';
@@ -50,7 +50,7 @@ export const OrdersView: React.FC = () => {
 
   const handleSelectOrder = (order: QueueItemSummary) => {
     selectPrescription(String(order.request_id));
-    navigate('/workspace');
+    navigate({ to: '/workspace' });
   };
 
   if (isLoading) {

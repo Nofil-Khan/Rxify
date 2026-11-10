@@ -22,6 +22,7 @@ from models.hospital import (
     HospitalUpdateSlotRequest,
 )
 from services import hospital as hospital_service
+from services.auth import default_auth_service
 
 router = APIRouter(prefix="/api/hospital", tags=["hospital"])
 
@@ -61,41 +62,22 @@ def register_hospital(body: HospitalRegister):
 
 @router.post("/login")
 def login_hospital(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Authenticate a hospital and return a JWT.
-    
-    This is entirely separate from the patient/doctor login.
-    """
-    hospital = hospital_service.authenticate_hospital(form_data.username, form_data.password)
-    
-    if not hospital:
+    """Authenticate a hospital and return a JWT."""
+    res = default_auth_service.authenticate_hospital(form_data.username, form_data.password)
+    if not res:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
-    if hospital["status"] != "ACTIVE":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Hospital account is suspended or inactive.",
-        )
 
-    # Note the specific sub and role for hospitals
-    access_token = create_access_token(
-        data={
-            "sub": f"hospital:{hospital['hospital_id']}",
-            "role": "HOSPITAL",
-            "hospital_id": hospital["hospital_id"],
-        }
-    )
-    
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": "HOSPITAL",
-        "hospital_id": hospital["hospital_id"],
-        "hospital_code": f"RXF-H-{hospital['hospital_id']}",
-        "name": hospital["name"],
+        "access_token": res.access_token,
+        "token_type": res.token_type,
+        "role": res.role,
+        "hospital_id": res.hospital_id,
+        "hospital_code": f"RXF-H-{res.hospital_id}",
+        "name": res.display_name,
     }
 
 

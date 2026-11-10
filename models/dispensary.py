@@ -77,6 +77,7 @@ class DispenseRequestBody(BaseModel):
     items: Optional[List[DispenseItemInput]] = Field(None, description="List of item quantities dispensed")
     notes: Optional[str] = Field(None, description="Pharmacist notes or instructions")
     pickup_code: Optional[str] = Field(None, description="6-digit verification code provided by patient at counter")
+    patient_code: Optional[str] = Field(None, description="Alias for pickup_code")
 
 
 # ── Inventory Availability (read-only, no reservation) ───────────────────────
@@ -104,17 +105,34 @@ class ApproveRequestBody(BaseModel):
 
 
 class ReconsultRequestBody(BaseModel):
-    reason: str = Field(..., description="Reason for reconsultation (e.g. OUT_OF_STOCK_ALTERNATE_NEEDED, DOSAGE_CLARIFICATION)")
-    pharmacist_notes: str = Field(..., min_length=3, description="Detailed clinical advice and reasoning for the doctor/patient")
+    reason: Optional[str] = Field("CLINICAL_CLARIFICATION_NEEDED", description="Reason for reconsultation")
+    pharmacist_notes: Optional[str] = Field(None, description="Detailed clinical advice and reasoning")
+    notes: Optional[str] = Field(None, description="Alternative alias for pharmacist notes")
     target: Optional[str] = Field("DOCTOR", description="Target of reconsultation: DOCTOR or PATIENT")
+    urgent: Optional[bool] = Field(False, description="Whether this query is clinically urgent")
     item_ids: Optional[List[int]] = Field(None, description="List of specific request item IDs needing reconsultation")
+
+    @property
+    def effective_notes(self) -> str:
+        return (self.pharmacist_notes or self.notes or "Clinical clarification requested by dispensing pharmacist.").strip()
 
 
 class UpdateRequestItemDecision(BaseModel):
     decision: str = Field(..., description="FULFILL | PARTIAL | SUBSTITUTE | UNAVAILABLE | RECONSULT")
     quantity: Optional[int] = Field(None, ge=0, description="Quantity to dispense/reserve")
+    dispensed_quantity: Optional[int] = Field(None, ge=0, description="Alternative alias for quantity")
     substitute_medicine_id: Optional[int] = Field(None, description="Dispensary stock medicine ID if substituting")
+    substitute_name: Optional[str] = Field(None, description="Substitute medication brand/generic name")
     notes: Optional[str] = Field(None, description="Pharmacist item note or substitution reason")
+    pharmacist_notes: Optional[str] = Field(None, description="Alternative alias for notes")
+
+    @property
+    def effective_quantity(self) -> Optional[int]:
+        return self.quantity if self.quantity is not None else self.dispensed_quantity
+
+    @property
+    def effective_notes(self) -> Optional[str]:
+        return self.notes or self.pharmacist_notes
 
 
 class VerifyPrescriptionBody(BaseModel):
@@ -122,5 +140,8 @@ class VerifyPrescriptionBody(BaseModel):
     dosage_validity_checked: bool = Field(True, description="Dosages, frequencies, and durations clinically validated")
     interactions_cleared: bool = Field(True, description="No critical drug interaction or allergy concerns")
     notes: Optional[str] = Field(None, description="Pharmacist verification review notes")
+    pickup_code: Optional[str] = Field(None, description="Patient 6-digit handover OTP code")
+    patient_code: Optional[str] = Field(None, description="Scanned patient code or OTP")
+
 
 

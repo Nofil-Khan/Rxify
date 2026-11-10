@@ -19,8 +19,6 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile, WebSocket, WebSocketDisconnect
 
 from core.security import create_access_token, require_dispensary, require_role
-from database.db import get_conn
-import psycopg2.extras
 from models.dispensary import (
     ApproveRequestBody,
     AvailabilityMedicineInput,
@@ -37,6 +35,7 @@ from models.dispensary import (
 )
 from services import inventory_availability as availability_service
 from services import dispensary as dispensary_service
+from services.auth import default_auth_service
 from services.websocket_manager import dispensary_ws_manager, verify_ws_token
 
 router = APIRouter(prefix="/api/dispensary", tags=["dispensary"])
@@ -75,30 +74,21 @@ def register_dispensary(body: DispensaryRegister):
 @router.post("/login")
 def login_dispensary(body: DispensaryLogin):
     """Authenticate dispensary organization and return JWT access token."""
-    dispensary = dispensary_service.authenticate_dispensary(body.email, body.password)
-    if dispensary is None:
+    res = default_auth_service.authenticate_dispensary(body.email, body.password)
+    if res is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
-    access_token = create_access_token(
-        data={
-            "sub": dispensary["email"],
-            "role": "DISPENSARY",
-            "dispensary_id": dispensary["dispensary_id"],
-            "hospital_id": dispensary["hospital_id"],
-        }
-    )
-
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": "DISPENSARY",
-        "dispensary_id": dispensary["dispensary_id"],
-        "dispensary_code": f"RXF-DISP-{dispensary['dispensary_id']}",
-        "hospital_id": dispensary["hospital_id"],
-        "name": dispensary["name"],
+        "access_token": res.access_token,
+        "token_type": res.token_type,
+        "role": res.role,
+        "dispensary_id": res.dispensary_id,
+        "dispensary_code": res.dispensary_code,
+        "hospital_id": res.hospital_id,
+        "name": res.display_name,
     }
 
 
@@ -150,78 +140,10 @@ def lookup_code(
 ):
     """Look up a scanned patient_code, prescription_id, or request_id to find associated dispensary requests."""
     dispensary_id = current_dispensary["dispensary_id"]
-    raw = code.strip().upper()
-
-    # 1. Check patient code format
-    clean_code = raw
-    if "RXF-P-" in raw:
-        idx = raw.find("RXF-P-")
-        clean_code = raw[idx : idx + 11]
-    elif raw.startswith("RXIFY:PATIENT:"):
-        clean_code = raw.replace("RXIFY:PATIENT:", "")
-
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # Check patient match
-            cur.execute(
-                """
-                SELECT req.request_id
-                FROM dispensary_request req
-                JOIN patient pt ON pt.patient_id = req.patient_id
-                WHERE req.dispensary_id = %s AND UPPER(pt.patient_code) = %s
-                ORDER BY req.created_at DESC
-                LIMIT 5
-                """,
-                (dispensary_id, clean_code),
-            )
-            patient_matches = cur.fetchall()
-            if patient_matches:
-                req_details = [
-                    dispensary_service.get_request_detail(dispensary_id, r["request_id"])
-                    for r in patient_matches
-                ]
-                return {
-                    "match_type": "patient",
-                    "patient_code": clean_code,
-                    "total": len(req_details),
-                    "requests": [d for d in req_details if d],
-                }
-
-            # Check prescription match (e.g. RXF-RX-5 or 5)
-            rx_clean = raw
-            if "RXF-RX-" in rx_clean:
-                rx_clean = rx_clean.replace("RXF-RX-", "")
-            elif rx_clean.startswith("RXIFY:PRESCRIPTION:"):
-                rx_clean = rx_clean.replace("RXIFY:PRESCRIPTION:", "")
-
-            if rx_clean.isdigit():
-                rx_id = int(rx_clean)
-                cur.execute(
-                    "SELECT request_id FROM dispensary_request WHERE dispensary_id = %s AND prescription_id = %s",
-                    (dispensary_id, rx_id),
-                )
-                rx_match = cur.fetchone()
-                if rx_match:
-                    req_detail = dispensary_service.get_request_detail(dispensary_id, rx_match["request_id"])
-                    return {
-                        "match_type": "prescription",
-                        "prescription_id": rx_id,
-                        "total": 1,
-                        "requests": [req_detail] if req_detail else [],
-                    }
-
-                # Check direct request_id
-                req_detail = dispensary_service.get_request_detail(dispensary_id, rx_id)
-                if req_detail:
-                    return {
-                        "match_type": "request",
-                        "request_id": rx_id,
-                        "total": 1,
-                        "requests": [req_detail],
-                    }
-
-    raise HTTPException(status_code=404, detail=f"No matching dispensary requests found for code '{code}'.")
-
+    res = dispensary_service.lookup_code(dispensary_id, code)
+    if not res:
+        raise HTTPException(status_code=404, detail=f"No matching dispensary requests found for code '{code}'.")
+    return res
 
 
 # =============================================================================
@@ -239,66 +161,7 @@ def search_medicine_catalog(
     Returns distinguishable candidates preserving legitimate strength, form,
     and formulation alternatives without silently collapsing them.
     """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if q and q.strip():
-                q_clean = q.strip()
-                cur.execute(
-                    """
-                    SELECT
-                        m.medicine_id,
-                        m.generic_name,
-                        COALESCE(m.brand_name, ma.alias_name) AS brand_name,
-                        m.category,
-                        m.strength,
-                        m.form,
-                        m.rxcui
-                    FROM medicine m
-                    LEFT JOIN (
-                        SELECT DISTINCT ON (medicine_id) medicine_id, alias_name
-                        FROM medicine_alias
-                        WHERE alias_name ILIKE %s
-                        ORDER BY medicine_id, LENGTH(alias_name) ASC
-                    ) ma ON ma.medicine_id = m.medicine_id
-                    WHERE m.generic_name ILIKE %s
-                       OR m.brand_name ILIKE %s
-                       OR m.rxnorm_name ILIKE %s
-                       OR ma.alias_name IS NOT NULL
-                    ORDER BY
-                        CASE
-                            WHEN LOWER(m.generic_name) = LOWER(%s) THEN 0
-                            WHEN LOWER(COALESCE(m.brand_name, ma.alias_name, '')) = LOWER(%s) THEN 1
-                            WHEN m.generic_name ILIKE %s THEN 2
-                            ELSE 3
-                        END,
-                        m.generic_name ASC,
-                        m.strength ASC NULLS LAST,
-                        m.form ASC NULLS LAST,
-                        m.medicine_id ASC
-                    LIMIT %s
-                    """,
-                    (
-                        f"%{q_clean}%",
-                        f"%{q_clean}%",
-                        f"%{q_clean}%",
-                        f"%{q_clean}%",
-                        q_clean,
-                        q_clean,
-                        f"{q_clean}%",
-                        limit,
-                    ),
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT medicine_id, generic_name, brand_name, category, strength, form, rxcui
-                    FROM medicine
-                    ORDER BY generic_name ASC, strength ASC NULLS LAST, form ASC NULLS LAST, medicine_id ASC
-                    LIMIT %s
-                    """,
-                    (limit,),
-                )
-            return [dict(r) for r in cur.fetchall()]
+    return dispensary_service.search_master_catalog(query=q, limit=limit)
 
 
 # =============================================================================
@@ -502,18 +365,14 @@ def reconsult_request(
     body: ReconsultRequestBody,
     current_dispensary: dict = Depends(require_dispensary()),
 ):
-    """Flag prescription ticket or specific medicines for doctor/patient reconsultation.
-
-    Releases any reserved inventory, records clinical advisory notes, sets status to RECONSULTATION_NEEDED,
-    and alerts the patient.
-    """
+    """Flag prescription ticket or specific medicines for doctor/patient reconsultation."""
     dispensary_id = current_dispensary["dispensary_id"]
     try:
         updated = dispensary_service.request_reconsultation(
             dispensary_id=dispensary_id,
             request_id=request_id,
-            reason=body.reason,
-            pharmacist_notes=body.pharmacist_notes,
+            reason=body.reason or "CLINICAL_CLARIFICATION_NEEDED",
+            pharmacist_notes=body.effective_notes,
             target=body.target or "DOCTOR",
             item_ids=body.item_ids,
         )
@@ -529,22 +388,44 @@ def reconsult_request(
 @router.patch("/requests/{request_id}/items/{item_id}")
 def update_item_decision(
     request_id: int,
-    item_id: int,
+    item_id: str,
     body: UpdateRequestItemDecision,
     current_dispensary: dict = Depends(require_dispensary()),
 ):
-    """Execute per-medicine fulfillment decision (FULFILL, PARTIAL, SUBSTITUTE, UNAVAILABLE, RECONSULT)."""
+    """Execute per-medicine fulfillment decision (FULFILL, PARTIAL, SUBSTITUTE, UNAVAILABLE, RECONSULT).
+
+    Supports passing numeric item_id or 'all' to update all line items in the ticket.
+    """
     dispensary_id = current_dispensary["dispensary_id"]
     try:
-        updated = dispensary_service.update_request_item_decision(
-            dispensary_id=dispensary_id,
-            request_id=request_id,
-            item_id=item_id,
-            decision=body.decision,
-            quantity=body.quantity,
-            substitute_medicine_id=body.substitute_medicine_id,
-            notes=body.notes,
-        )
+        if str(item_id).lower() == "all":
+            # Bulk update all items in the request ticket
+            detail = dispensary_service.get_request_detail(dispensary_id, request_id)
+            if not detail or not detail.get("items"):
+                raise ValueError("No items found to update for this request.")
+            updated = None
+            for it in detail["items"]:
+                updated = dispensary_service.update_request_item_decision(
+                    dispensary_id=dispensary_id,
+                    request_id=request_id,
+                    item_id=it["item_id"],
+                    decision=body.decision,
+                    quantity=body.effective_quantity,
+                    substitute_medicine_id=body.substitute_medicine_id,
+                    substitute_name=body.substitute_name,
+                    notes=body.effective_notes,
+                )
+        else:
+            updated = dispensary_service.update_request_item_decision(
+                dispensary_id=dispensary_id,
+                request_id=request_id,
+                item_id=int(item_id),
+                decision=body.decision,
+                quantity=body.effective_quantity,
+                substitute_medicine_id=body.substitute_medicine_id,
+                substitute_name=body.substitute_name,
+                notes=body.effective_notes,
+            )
         return {
             "success": True,
             "message": f"Medicine decision '{body.decision}' applied successfully.",
@@ -562,11 +443,12 @@ def verify_prescription_route(
 ):
     """Sign-off on clinical prescription verification record by the dispensing pharmacist."""
     dispensary_id = current_dispensary["dispensary_id"]
-    user_id = current_dispensary["id"]
+    user_id = current_dispensary.get("id") or current_dispensary.get("user_id")
     p_chk = body.patient_identity_checked if body else True
     d_chk = body.dosage_validity_checked if body else True
     i_chk = body.interactions_cleared if body else True
     notes = body.notes if body else None
+    pickup_code = (body.pickup_code or body.patient_code) if body else None
 
     try:
         updated = dispensary_service.verify_prescription(
@@ -577,6 +459,7 @@ def verify_prescription_route(
             dosage_checked=d_chk,
             interactions_checked=i_chk,
             notes=notes,
+            pickup_code=pickup_code,
         )
         return {
             "success": True,
@@ -652,7 +535,7 @@ def dispense_request(
     dispensary_id = current_dispensary["dispensary_id"]
     items_input = [i.model_dump() for i in body.items] if body and body.items else None
     notes = body.notes if body else None
-    pickup_code = body.pickup_code if body else None
+    pickup_code = (body.pickup_code or body.patient_code) if body else None
 
     try:
         updated = dispensary_service.dispense_request(

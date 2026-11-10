@@ -85,7 +85,7 @@ export const QueueHeader: React.FC<QueueHeaderProps> = ({ totalCount }) => {
           </DropdownMenuLabel>
 
           <DropdownMenuItem
-            onClick={() => setFilterUnavailableOnly((prev) => !prev)}
+            onClick={() => setFilterUnavailableOnly((prev: boolean) => !prev)}
             className="flex cursor-pointer items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-cream-from hover:bg-mint-400/15"
           >
             <span className="flex items-center gap-2">

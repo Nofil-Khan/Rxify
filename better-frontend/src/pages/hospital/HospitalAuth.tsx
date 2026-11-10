@@ -59,8 +59,9 @@ export default function HospitalAuth() {
       const res = await hospitalLogin(lEmail.trim(), lPass);
       setHospitalAuth(res.access_token, res.hospital_id, res.name, res.hospital_code);
       navigate({ to: '/hospital' });
-    } catch (err: any) {
-      setLError(err?.message ?? 'Incorrect email or password.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Incorrect email or password.';
+      setLError(msg);
     } finally {
       setLLoading(false);
     }
@@ -107,8 +108,9 @@ export default function HospitalAuth() {
         setTab('login');
         setRSuccess('');
       }, 1800);
-    } catch (err: any) {
-      setRError(err?.message ?? 'Registration failed. Check if email or registration number is already in use.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed. Check if email or registration number is already in use.';
+      setRError(msg);
     } finally {
       setRLoading(false);
     }

@@ -33,8 +33,9 @@ export default function DoctorsTab({ onScanDoctorClick }: DoctorsTabProps) {
     try {
       const res = await fetchHospitalDoctors();
       setDoctors(res.doctors || []);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load affiliated doctors roster.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load affiliated doctors roster.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -60,8 +61,9 @@ export default function DoctorsTab({ onScanDoctorClick }: DoctorsTabProps) {
         setShowAddModal(false);
         setActionSuccess(null);
       }, 1500);
-    } catch (err: any) {
-      setActionError(err?.message || 'Failed to affiliate doctor.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to affiliate doctor.';
+      setActionError(msg);
     } finally {
       setActionLoading(false);
     }
@@ -72,8 +74,9 @@ export default function DoctorsTab({ onScanDoctorClick }: DoctorsTabProps) {
     try {
       await removeDoctorAffiliation(doctorId);
       loadDoctors();
-    } catch (err: any) {
-      alert(err?.message || 'Failed to remove doctor.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to remove doctor.';
+      alert(msg);
     }
   };
 

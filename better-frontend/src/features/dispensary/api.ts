@@ -22,6 +22,9 @@ async function handleResponse<T>(res: Response, schema: z.ZodSchema<T>): Promise
     } catch {
       // ignore
     }
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rxify-auth-unauthorized', { detail: { status: 401, message: errMsg } }));
+    }
     throw new Error(errMsg);
   }
   const data = await res.json();
@@ -32,6 +35,34 @@ async function handleResponse<T>(res: Response, schema: z.ZodSchema<T>): Promise
   return parsed.data;
 }
 
+interface RawQueueLineItem {
+  medicine_id?: number | string;
+  item_id?: number | string;
+  generic_name?: string;
+  prescribed_medicine_name?: string;
+  strength?: string;
+  required_quantity?: number;
+  qty?: number;
+  available_quantity?: number;
+}
+
+interface RawDispensaryQueueItem {
+  request_id?: number | string;
+  rxNumber?: string;
+  prescription_id?: number | string;
+  status?: string;
+  created_at?: string;
+  patient_id?: number | string;
+  patient_name?: string;
+  doctor_name?: string;
+  doctor_specialty?: string;
+  diagnosis?: string;
+  notes?: string;
+  pharmacist_notes?: string;
+  prescription_notes?: string;
+  items?: RawQueueLineItem[];
+}
+
 export async function fetchPrescriptions(status?: string): Promise<Prescription[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   const token = typeof window !== 'undefined' ? localStorage.getItem('rxify_token') : null;
@@ -40,7 +71,7 @@ export async function fetchPrescriptions(status?: string): Promise<Prescription[
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
   const data = await res.json();
   if (Array.isArray(data)) {
-    const normalized = data.map((item: any) => {
+    const normalized = (data as RawDispensaryQueueItem[]).map((item: RawDispensaryQueueItem) => {
       if (item.request_id && !item.rxNumber) {
         return {
           id: String(item.request_id),
@@ -61,7 +92,7 @@ export async function fetchPrescriptions(status?: string): Promise<Prescription[
           },
           diagnosis: item.diagnosis || 'Prescribed Medication',
           notes: item.notes || item.pharmacist_notes || 'Complete full course as directed.',
-          items: item.items && item.items.length > 0 ? item.items.map((it: any) => ({
+          items: item.items && item.items.length > 0 ? item.items.map((it: RawQueueLineItem) => ({
             medicine: {
               id: String(it.medicine_id || it.item_id || 'med-1'),
               name: it.generic_name || it.prescribed_medicine_name || 'Medicine',
@@ -93,7 +124,7 @@ export async function fetchPrescription(id: string): Promise<Prescription> {
   const endpoint = token ? `${API_BASE}/api/dispensary/requests/${id}` : `${API_BASE}/api/prescriptions/${id}`;
   const res = await fetch(endpoint, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-  const item = await res.json();
+  const item = (await res.json()) as RawDispensaryQueueItem;
   if (item.request_id && !item.rxNumber) {
     const normalized = {
       id: String(item.request_id),
@@ -114,7 +145,7 @@ export async function fetchPrescription(id: string): Promise<Prescription> {
       },
       diagnosis: item.diagnosis || 'Prescribed Medication',
       notes: item.prescription_notes || item.notes || 'Take after meals.',
-      items: item.items && item.items.length > 0 ? item.items.map((it: any) => ({
+      items: item.items && item.items.length > 0 ? item.items.map((it: RawQueueLineItem) => ({
         medicine: {
           id: String(it.medicine_id || it.item_id || 'med-1'),
           name: it.generic_name || it.prescribed_medicine_name || 'Medicine',
@@ -167,19 +198,27 @@ export async function verifyPickupCommand(
   const res = await fetch(`${API_BASE}/api/dispensary/requests/${requestId}/verify`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ patient_code: patientCode }),
+    body: JSON.stringify({
+      patient_code: patientCode,
+      patient_identity_checked: true,
+      dosage_validity_checked: true,
+      interactions_cleared: true,
+    }),
   });
   return handleResponse(res, BackendCommandResultSchema);
 }
 
 export async function dispenseRequestCommand(
   requestId: string,
-  patientCode: string
+  pickupCode?: string
 ): Promise<BackendCommandResult> {
   const res = await fetch(`${API_BASE}/api/dispensary/requests/${requestId}/dispense`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ patient_code: patientCode }),
+    body: JSON.stringify({
+      pickup_code: pickupCode,
+      patient_code: pickupCode,
+    }),
   });
   return handleResponse(res, BackendCommandResultSchema);
 }
@@ -201,7 +240,8 @@ export async function updateItemDecisionCommand(
   itemId: string,
   decision: string,
   dispensedQuantity?: number,
-  notes?: string
+  notes?: string,
+  substituteName?: string
 ): Promise<BackendCommandResult> {
   const res = await fetch(`${API_BASE}/api/dispensary/requests/${requestId}/items/${itemId}`, {
     method: 'PATCH',
@@ -210,6 +250,7 @@ export async function updateItemDecisionCommand(
       decision,
       dispensed_quantity: dispensedQuantity,
       pharmacist_notes: notes,
+      substitute_name: substituteName,
     }),
   });
   return handleResponse(res, BackendCommandResultSchema);
@@ -218,12 +259,17 @@ export async function updateItemDecisionCommand(
 export async function reconsultDoctorCommand(
   requestId: string,
   notes: string,
-  urgent: boolean = false
+  urgent: boolean = false,
+  reason?: string
 ): Promise<BackendCommandResult> {
   const res = await fetch(`${API_BASE}/api/dispensary/requests/${requestId}/reconsult`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ notes, urgent }),
+    body: JSON.stringify({
+      notes,
+      urgent,
+      reason: reason || 'CLINICAL_CLARIFICATION_NEEDED',
+    }),
   });
   return handleResponse(res, BackendCommandResultSchema);
 }

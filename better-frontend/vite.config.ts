@@ -19,4 +19,24 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('leaflet') || id.includes('html5-qrcode') || id.includes('react-qr-code')) {
+              return 'vendor-heavy-tools';
+            }
+            if (id.includes('gsap') || id.includes('lenis')) {
+              return 'vendor-animations';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+          }
+        },
+      },
+    },
+  },
 });

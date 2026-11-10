@@ -19,12 +19,8 @@ export const StockPanel: React.FC = () => {
   const [isBookmarked, setIsBookmarked] = React.useState<boolean>(false);
 
   const selectedMedicine = React.useMemo(() => {
-    const rx =
-      prescriptions.find((p) => p.id === selectedPrescriptionId) ?? prescriptions[0];
-    return (
-      rx?.medicines.find((m) => m.id === selectedMedicineId) ??
-      rx?.medicines[0]
-    );
+    const rx = prescriptions.find((p) => p.id === selectedPrescriptionId) ?? prescriptions[0];
+    return rx?.medicines.find((m) => m.id === selectedMedicineId) ?? rx?.medicines[0];
   }, [prescriptions, selectedPrescriptionId, selectedMedicineId]);
 
   if (!selectedMedicine) return null;
@@ -37,7 +33,7 @@ export const StockPanel: React.FC = () => {
       className="relative flex h-full min-w-0 flex-col justify-between p-6 overflow-visible border-mint-400/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-400"
       aria-label={`Stock details for ${selectedMedicine.name}`}
     >
-      {/* 3D Floating Overlapping Capsule Prop with subtle hover parallax */}
+      {/* 3D Floating Overlapping Capsule Prop */}
       <motion.div
         className="absolute -top-8 right-14 z-30 pointer-events-none"
         animate={{ y: [0, -5, 0] }}
@@ -45,14 +41,7 @@ export const StockPanel: React.FC = () => {
         whileHover={{ y: -8, rotate: -36, scale: 1.05 }}
         aria-hidden="true"
       >
-        <img
-          src={capStock3D}
-          alt=""
-          width={88}
-          height={88}
-          loading="lazy"
-          className="drop-shadow-2xl select-none"
-        />
+        <img src={capStock3D} alt="" width={88} height={88} loading="lazy" className="drop-shadow-2xl select-none" />
       </motion.div>
 
       {/* Top Header Row: Medicine Title, Subtitle, and Bookmark Toggle */}
@@ -131,7 +120,17 @@ export const StockPanel: React.FC = () => {
       <div className="pt-3 z-10">
         <button
           type="button"
-          onClick={openManageStockModal}
+          onClick={() =>
+            openManageStockModal({
+              medicineId: selectedMedicine.medicineId ?? selectedMedicine.id,
+              name: selectedMedicine.name,
+              strength: selectedMedicine.strength,
+              form: selectedMedicine.form,
+              availableQuantity: selectedMedicine.inStockQuantity,
+              reorderLevel: 10,
+              unit: 'units',
+            })
+          }
           className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-500/25 to-mint-400/20 border border-mint-400/35 px-4 py-3 text-xs font-semibold text-white backdrop-blur-md transition-all hover:from-emerald-500/40 hover:to-mint-400/30 hover:border-mint-400/60 shadow-glass focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
           aria-label="Open Manage Stock dialog"
         >

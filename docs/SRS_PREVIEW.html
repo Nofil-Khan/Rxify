@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rxify — Software Requirements Specification (SRS)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#04120D',
+        primaryColor: '#065F46',
+        primaryTextColor: '#ECFDF5',
+        primaryBorderColor: '#34D399',
+        lineColor: '#6EE7B7',
+        secondaryColor: '#0A2A20',
+        tertiaryColor: '#022C22'
+      }
+    });
+  </script>
+  <style>
+    body { background-color: #04120D; color: #F8F0E5; }
+    .glass-card { background: rgba(10, 42, 32, 0.6); backdrop-filter: blur(16px); border: 1px solid rgba(110, 231, 183, 0.15); }
+    .mermaid { display: flex; justify-content: center; }
+  </style>
+</head>
+<body class="p-6 lg:p-12 font-sans antialiased max-w-5xl mx-auto space-y-10">
+
+  <!-- Document Header -->
+  <header class="border-b border-emerald-500/20 pb-6 flex flex-col gap-2">
+    <div class="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.25em] text-emerald-400">
+      <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      Engineering Architecture Reference
+    </div>
+    <h1 class="text-3xl lg:text-4xl font-serif font-bold text-white tracking-tight">
+      Rxify — Software Requirements Specification (SRS)
+    </h1>
+    <p class="text-sm text-emerald-200/70">
+      Object-Oriented Domain-Driven Architecture & Implementation Blueprint
+    </p>
+  </header>
+
+  <!-- Section 1: Vision -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-4">
+    <h2 class="text-xl font-bold text-emerald-300 font-serif border-b border-emerald-500/15 pb-2">
+      1. System Vision & Architectural Principles
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs leading-relaxed text-emerald-100/80">
+      <div class="bg-black/30 p-4 rounded-2xl border border-emerald-500/10">
+        <strong class="text-emerald-300 block mb-1">Single Responsibility</strong>
+        Eliminate monolithic files (>1000 lines). Every file has a single role: Repository, Service, or Entity.
+      </div>
+      <div class="bg-black/30 p-4 rounded-2xl border border-emerald-500/10">
+        <strong class="text-emerald-300 block mb-1">Service-Repository Pattern</strong>
+        Repositories encapsulate SQL data access. Services manage business rules. Routers remain thin controllers.
+      </div>
+      <div class="bg-black/30 p-4 rounded-2xl border border-emerald-500/10">
+        <strong class="text-emerald-300 block mb-1">Modular Frontend</strong>
+        Components kept strictly under 150 lines. React Query for server cache, Zustand for local UI toggles.
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Module 1 Auth -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <h2 class="text-xl font-bold text-emerald-300 font-serif">
+        2. Module 1: Authentication & Identity Management
+      </h2>
+      <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        COMPLETED & ACTIVE
+      </span>
+    </div>
+
+    <!-- Package Structure -->
+    <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+      <div class="text-emerald-400 font-bold mb-2">// Package Structure: services/auth/</div>
+      <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# AuthUser, TokenPayload, AuthResult (Entities)</div>
+      <div>├── password_service.py &nbsp;&nbsp;# PasswordService (Bcrypt hash & verify)</div>
+      <div>├── token_service.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# TokenService (HS256 JWT claims signer)</div>
+      <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# UserRepository (SQL data access for accounts)</div>
+      <div>└── auth_service.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# AuthService (Facade for login & registration)</div>
+    </div>
+
+    <!-- Diagram 1: Architectural Flow -->
+    <div class="space-y-3 pt-2">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 2.1 — Layered Architectural Flow
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+flowchart TD
+    classDef client fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#ECFDF5
+    classDef facade fill:#065F46,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef service fill:#047857,stroke:#A7F3D0,stroke-width:1.5px,color:#FFFFFF
+    classDef db fill:#022C22,stroke:#059669,stroke-width:2px,color:#6EE7B7
+
+    subgraph INGRESS["1. Client Ingress Layer"]
+        C1["Patient / Doctor Client"]:::client
+        C2["Dispensary Terminal"]:::client
+        C3["Hospital Enterprise Portal"]:::client
+    end
+
+    subgraph ROUTERS["2. REST API Controllers"]
+        R1["routers/auth.py<br/>/api/login"]:::service
+        R2["routers/dispensary.py<br/>/api/dispensary/login"]:::service
+        R3["routers/hospital.py<br/>/api/hospital/login"]:::service
+    end
+
+    subgraph CORE_AUTH["3. Modular OOP Auth Service Layer"]
+        AUTH["AuthService (Facade)"]:::facade
+        PASS["PasswordService<br/>(Bcrypt Salt & Verify)"]:::service
+        TOKEN["TokenService<br/>(HS256 JWT Claims)"]:::service
+        REPO["UserRepository<br/>(Parameterized SQL)"]:::service
+    end
+
+    subgraph STORAGE["4. Persistence Engine"]
+        PG[("PostgreSQL 15+<br/>users | dispensary | hospital")]:::db
+    end
+
+    C1 -->|POST credentials| R1
+    C2 -->|POST credentials| R2
+    C3 -->|POST credentials| R3
+
+    R1 -->|authenticate_general| AUTH
+    R2 -->|authenticate_dispensary| AUTH
+    R3 -->|authenticate_hospital| AUTH
+
+    AUTH -->|1. Lookup user| REPO
+    REPO -->|2. SELECT + JOINs| PG
+    PG -->|3. Row tuple| REPO
+    REPO -->|4. AuthUser Entity| AUTH
+
+    AUTH -->|5. Verify hash| PASS
+    PASS -->|6. Valid / Invalid| AUTH
+
+    AUTH -->|7. Sign claims| TOKEN
+    TOKEN -->|8. Signed JWT| AUTH
+    AUTH -->|9. AuthResult| ROUTERS
+    ROUTERS -->|10. JSON Bearer Response| INGRESS
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 2: Sequence Lifecycle -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 2.2 — Ingress & Verification Sequence Lifecycle
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as User Client
+    participant Router as routers/auth.py
+    participant Auth as AuthService (Facade)
+    participant Repo as UserRepository
+    participant Password as PasswordService
+    participant Token as TokenService
+    participant DB as PostgreSQL
+
+    Client->>Router: POST /api/login (email, password)
+    Router->>Auth: authenticate_general(email, password)
+    Auth->>Repo: get_by_email(email)
+    Repo->>DB: SELECT u.*, p.patient_id, d.doctor_id FROM users...
+    DB-->>Repo: SQL Row Data
+    Repo-->>Auth: AuthUser (Immutable Entity)
+
+    alt Account Suspended or Not Found
+        Auth-->>Router: None
+        Router-->>Client: 401 Unauthorized
+    else Account Active
+        Auth->>Password: verify_password(plain, password_hash)
+        Password-->>Auth: True (Timing-safe match)
+        Auth->>Token: create_token(AuthUser)
+        Token-->>Auth: Signed JWT String
+        Auth-->>Router: AuthResult(access_token, role, uid)
+        Router-->>Client: 200 OK { access_token, role, user_id }
+    end
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 3: Protected Route Guard -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 2.3 — Role Guard Authorization Flow (require_role)
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as Authenticated Client
+    participant Guard as core/security.py (require_role)
+    participant Token as TokenService
+    participant Repo as UserRepository
+    participant Handler as Protected Route Handler
+
+    Client->>Guard: GET /api/dispensary/queue (Authorization: Bearer jwt)
+    Guard->>Token: decode_token(jwt)
+    alt Invalid Signature or Expired
+        Token-->>Guard: Raises PyJWTError
+        Guard-->>Client: 401 Unauthorized
+    else Valid Token
+        Token-->>Guard: TokenPayload(uid, role, dispensary_id)
+        Guard->>Repo: get_by_id(payload.uid)
+        Repo-->>Guard: AuthUser Entity
+        alt Role Mismatch
+            Guard-->>Client: 403 Forbidden ("Required role: DISPENSARY")
+        else Role Authorized
+            Guard->>Handler: Injects current_user context
+            Handler-->>Client: 200 OK (Protected Data)
+        end
+    end
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Module 2 Clinical & Prescription Intake -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <div>
+        <h2 class="text-xl font-bold text-emerald-300 font-serif">
+          3. Module 2: Prescription Intake & Clinical Ontology Engine
+        </h2>
+        <p class="text-xs text-emerald-200/60 mt-0.5">
+          5-Tier Resolution Pipeline & Prescription Timeline Normalization
+        </p>
+      </div>
+      <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        COMPLETED & ACTIVE
+      </span>
+    </div>
+
+    <!-- Package Structure Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+        <div class="text-emerald-400 font-bold mb-2">// Package: services/clinical/</div>
+        <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# MatchStatus, MatchResult, Candidates</div>
+        <div>├── synonyms.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# SynonymBridge (BAN/IP ↔ USAN/RxNorm)</div>
+        <div>├── normalizer.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# ClinicalNormalizer (Token & strength)</div>
+        <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# MedicineCatalogRepository (pg_trgm)</div>
+        <div>└── matcher_service.py &nbsp;# MedicineMatcherService (5-Tier Pipeline)</div>
+      </div>
+
+      <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+        <div class="text-emerald-400 font-bold mb-2">// Package: services/prescription/</div>
+        <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PrescriptionItem, PrescriptionData</div>
+        <div>├── parsers.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Date & Dosage Schedule Parsers</div>
+        <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PrescriptionRepository (SQL CRUD)</div>
+        <div>└── prescription_service.py # Ingestion & Timeline Synchronization</div>
+      </div>
+    </div>
+
+    <!-- Diagram 3.1: 5-Tier Pipeline -->
+    <div class="space-y-3 pt-2">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 3.1 — 5-Tier Clinical Drug Resolution Architecture
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+flowchart TD
+    classDef input fill:#0F291E,stroke:#34D399,stroke-width:2px,color:#ECFDF5
+    classDef guard fill:#022C22,stroke:#059669,stroke-width:1.5px,color:#6EE7B7
+    classDef tier fill:#065F46,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef match fill:#047857,stroke:#A7F3D0,stroke-width:2px,color:#FFFFFF
+    classDef fail fill:#450A0A,stroke:#F87171,stroke-width:1.5px,color:#FEE2E2
+
+    RAW["Raw Medicine String<br/>(e.g., 'Tab Crocin 650mg TDS')"]:::input --> NORM["ClinicalNormalizer<br/>Clean tokens, strip forms, extract strength"]:::guard
+    
+    NORM --> GUARD{"Is Non-Medicine<br/>Vocabulary?"}:::guard
+    GUARD -->|Yes| NOT_MED["MatchResult: NOT_A_MEDICINE<br/>(Discard from Rx sync)"]:::fail
+    GUARD -->|No| T1["Tier 1: Exact Alias Lookup<br/>(medicine_alias table)"]:::tier
+
+    T1 -->|Found| RES1["MatchResult: MATCHED<br/>(Confidence: 1.0)"]:::match
+    T1 -->|Miss| T2["Tier 2: Synonym Bridge<br/>(BAN / IP / EP ↔ USAN / RxNorm)"]:::tier
+
+    T2 -->|Found| RES2["MatchResult: MATCHED<br/>(Confidence: 0.98)"]:::match
+    T2 -->|Miss| T3["Tier 3: Exact Catalog Match<br/>(medicine table)"]:::tier
+
+    T3 -->|Found| RES3["MatchResult: MATCHED<br/>(Confidence: 0.95)"]:::match
+    T3 -->|Miss| T4["Tier 4: pg_trgm Fuzzy Similarity<br/>(Trigram Index > 0.35)"]:::tier
+
+    T4 -->|Sim ≥ 0.70| RES4["MatchResult: MATCHED<br/>(Confidence: Sim)"]:::match
+    T4 -->|0.45 ≤ Sim < 0.70 & Delta ≥ 0.10| RES4
+    T4 -->|0.45 ≤ Sim < 0.70 & Ambiguous| AMB["MatchResult: AMBIGUOUS<br/>(Top 3 Ranked Candidates)"]:::fail
+    T4 -->|Sim < 0.45| T5["Tier 5: Fast AI Clinical Fallback<br/>(Domain LLM Inference)"]:::tier
+
+    T5 -->|AI Matched| RES5["MatchResult: MATCHED<br/>(Confidence: 0.85)"]:::match
+    T5 -->|AI Unresolved| UNRES["MatchResult: UNRESOLVED<br/>(Flagged for Pharmacist Review)"]:::fail
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 3.2: Prescription Ingestion Sequence -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 3.2 — Prescription Ingestion & Timeline Sync Sequence
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as Patient / Doctor / OCR
+    participant Router as routers/upload.py
+    participant RxService as PrescriptionService
+    participant Matcher as MedicineMatcherService
+    participant Repo as PrescriptionRepository
+    participant DispQueue as Dispensary Queue
+    participant DB as PostgreSQL 15+
+
+    Client->>Router: POST /api/upload-prescription (JSON)
+    Router->>RxService: ingest_extracted_prescription(dict, user_id)
+    RxService->>Repo: get_or_create_patient_id(user_id)
+    Repo-->>RxService: patient_id
+    RxService->>Repo: create_prescription(patient_id, dates, notes)
+    Repo->>DB: INSERT INTO prescription RETURNING id
+    DB-->>Repo: prescription_id
+    Repo-->>RxService: prescription_id
+
+    loop For Each Medication
+        RxService->>Repo: insert_prescription_item(rx_id, raw_name, dosage...)
+        Repo-->>RxService: prescription_medicine_id
+        RxService->>Matcher: resolve(raw_name, dosage, form)
+        Matcher-->>RxService: MatchResult(status, medicine_id)
+        RxService->>Repo: update_item_resolution(pm_id, medicine_id, status)
+    end
+
+    RxService->>Repo: insert_current_medication(patient_id, medicine_id...)
+    Repo->>DB: INSERT / UPSERT INTO current_medication
+    RxService->>DispQueue: create_dispensary_request_for_prescription(rx_id)
+    DispQueue->>DB: INSERT INTO dispensary_request
+    RxService-->>Router: prescription_id
+    Router-->>Client: 201 Created { prescription_id, status: 'processed' }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Module 3 Dispensary Fulfillment & Stock Control -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <div>
+        <h2 class="text-xl font-bold text-emerald-300 font-serif">
+          4. Module 3: Dispensary Fulfillment & Inventory Stock Control
+        </h2>
+        <p class="text-xs text-emerald-200/60 mt-0.5">
+          Atomic Stock Reservations, Verification Sign-Off, 6-Digit OTP Handover & Real-Time WebSockets
+        </p>
+      </div>
+      <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        COMPLETED & ACTIVE
+      </span>
+    </div>
+
+    <!-- Package Structure Cards -->
+    <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+      <div class="text-emerald-400 font-bold mb-2">// Package: services/dispensary/</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# DispensaryProfile, StockItem, DispensaryOrder</div>
+        <div>├── dispatcher.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# DispensaryNotificationDispatcher (WS & Alerts)</div>
+        <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# DispensaryRepository (SQL Transactions & Locks)</div>
+        <div>├── stock_service.py &nbsp;&nbsp;&nbsp;&nbsp;# StockAllocationService (Inventory CRUD & CSV Import)</div>
+        <div>├── fulfillment_service.py # OrderFulfillmentService (Queue, Workflow, OTP)</div>
+        <div>├── analytics_service.py &nbsp;# DispensaryAnalyticsService (KPIs & Trends)</div>
+        <div>└── __init__.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Package exports & backwards-compatible facades</div>
+      </div>
+    </div>
+
+    <!-- Diagram 4.1: State Diagram -->
+    <div class="space-y-3 pt-2">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 4.1 — Dispensary Order Fulfillment State Machine
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> PENDING: Prescription Ingested
+
+    PENDING --> CONFIRMED: Pharmacist Confirms / Approves
+    PENDING --> PARTIALLY_AVAILABLE: Partial Item Stock Detected
+    PENDING --> UNAVAILABLE: No Items in Stock
+    PENDING --> CANCELLED: Order Cancelled
+
+    PARTIALLY_AVAILABLE --> CONFIRMED: Pharmacist Substitutes / Approves Partial
+    PARTIALLY_AVAILABLE --> RECONSULTATION_NEEDED: Doctor Advice Required
+
+    CONFIRMED --> PROCESSING: Pharmacist Begins Preparation
+    PROCESSING --> READY: Packaged & Sealed for Collection
+    READY --> DISPENSED: 6-Digit OTP Verified & Handover Complete
+
+    CONFIRMED --> RECONSULTATION_NEEDED: Clinical Conflict Flagged
+    PROCESSING --> RECONSULTATION_NEEDED: Clinical Conflict Flagged
+
+    RECONSULTATION_NEEDED --> CONFIRMED: Doctor Updates Prescription
+    CONFIRMED --> CANCELLED: Order Cancelled
+    PROCESSING --> CANCELLED: Order Cancelled
+    READY --> CANCELLED: Patient Cancelled
+
+    DISPENSED --> [*]: Handover Recorded to Audit Ledger
+    CANCELLED --> [*]: Stock Reservations Released
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 4.2: Handover Sequence -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 4.2 — Handover Verification & Stock Reservation Sequence
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Pharmacist as Dispensary Pharmacist
+    actor Patient as Patient / Courier
+    participant Terminal as Dispensary Workspace
+    participant WS as WebSocket Channel
+    participant Service as OrderFulfillmentService
+    participant DB as PostgreSQL 15+
+
+    Note over Pharmacist,Terminal: 1. Ticket Confirmation & Stock Reservation
+    Pharmacist->>Terminal: Approve / Confirm Order
+    Terminal->>Service: confirm_or_approve_request(dispensary_id, request_id)
+    Service->>DB: SELECT FOR UPDATE on request & stock rows
+    Service->>DB: UPDATE stock SET reserved_quantity = reserved_quantity + qty
+    Service->>DB: INSERT INTO inventory_transaction (txn_type='MEDICINE_RESERVED')
+    Service->>DB: UPDATE dispensary_request SET status = 'CONFIRMED'
+    Service->>WS: Broadcast STATUS_CHANGED (CONFIRMED)
+
+    Note over Pharmacist,Terminal: 2. Clinical Verification Sign-Off
+    Pharmacist->>Terminal: Submit Verification Checklist (ID, DDI, Dosage)
+    Terminal->>Service: verify_prescription(request_id, checklist)
+    Service->>DB: UPDATE dispensary_request SET verified_at = NOW(), signature = %s
+
+    Note over Pharmacist,Terminal: 3. Preparation & Ready Notice
+    Pharmacist->>Terminal: Mark Ready for Pickup
+    Terminal->>Service: mark_request_ready(dispensary_id, request_id)
+    Service->>DB: UPDATE dispensary_request SET status = 'READY'
+    Service->>Service: Notify Patient with 6-Digit Pickup Code
+    Service->>WS: Broadcast STATUS_CHANGED (READY)
+
+    Note over Patient,Terminal: 4. OTP Verification & Physical Dispensing
+    Patient->>Pharmacist: Presents 6-Digit Pickup Code (482910)
+    Pharmacist->>Terminal: Enter Code & Complete Dispensing
+    Terminal->>Service: dispense_request(request_id, pickup_code='482910')
+    Service->>DB: Validate OTP match FOR UPDATE
+    Service->>DB: UPDATE stock: deduct available & reserved quantity
+    Service->>DB: INSERT INTO inventory_transaction (txn_type='MEDICINE_DISPENSED')
+    Service->>DB: UPDATE dispensary_request SET status = 'DISPENSED'
+    Service->>WS: Broadcast STATUS_CHANGED (DISPENSED)
+    Service-->>Terminal: 200 OK Handover Complete
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Module 4 Patient Care & Adherence Schedule -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <div>
+        <h2 class="text-xl font-bold text-emerald-300 font-serif">
+          5. Module 4: Patient Adherence & Medication Schedule Engine
+        </h2>
+        <p class="text-xs text-emerald-200/60 mt-0.5">
+          Milestone Timeline Graphs, Patient-in-the-Loop Clarification & Self-Learning Aliases
+        </p>
+      </div>
+      <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        COMPLETED & ACTIVE
+      </span>
+    </div>
+
+    <!-- Package Structure Cards -->
+    <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+      <div class="text-emerald-400 font-bold mb-2">// Package: services/patient_care/</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PatientStats, DoctorProfile, TimelineMilestone</div>
+        <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PatientRepository (SQL Access & Doctor Relations)</div>
+        <div>├── timeline_service.py &nbsp;# MedicationTimelineService (Milestone Synthesis)</div>
+        <div>├── care_service.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# PatientCareService (Disambiguation & Status)</div>
+        <div>└── __init__.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Package exports & singletons</div>
+      </div>
+    </div>
+
+    <!-- Diagram 5.1: Clarification Loop -->
+    <div class="space-y-3 pt-2">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 5.1 — Patient-in-the-Loop Disambiguation & Self-Learning Loop
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+flowchart TD
+    classDef client fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#ECFDF5
+    classDef service fill:#065F46,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef db fill:#022C22,stroke:#059669,stroke-width:2px,color:#6EE7B7
+    classDef loop fill:#047857,stroke:#A7F3D0,stroke-width:2px,color:#FFFFFF
+
+    CLI["Patient Portal UI"]:::client -->|GET /api/patient/prescriptions/{id}| DET["PatientCareService<br/>get_my_prescription_detail()"]:::service
+    DET -->|"Medication: match_status='AMBIGUOUS'"| AMB["Patient Review Required"]:::client
+
+    AMB -->|GET /api/patient/medicine-candidates| CAND["PatientCareService<br/>get_medicine_candidates()"]:::service
+    CAND -->|pg_trgm Ranked Drug List| AMB
+
+    AMB -->|POST /api/patient/resolve-medicine (medicine_id)| RES["PatientCareService<br/>resolve_prescription_medicine()"]:::service
+    
+    RES -->|1. Commit Choice| P1["UPDATE prescription_medicine<br/>SET match_status='MATCHED', patient_resolved=TRUE"]:::db
+    RES -->|2. Store Self-Learned Synonym| P2["INSERT INTO medicine_alias<br/>(alias_name, medicine_id, alias_type='user_learned')"]:::loop
+    RES -->|3. Trigger Dispensary Re-Evaluation| P3["DispensaryOrderFulfillmentService<br/>create_dispensary_request_for_prescription()"]:::service
+
+    P3 -->|4. Real-Time Stock Availability Sync| WS["Dispensary Queue & Live WebSocket"]:::client
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 5.2: Adherence Timeline Sequence -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 5.2 — Medication Adherence Timeline & Milestone Generation Sequence
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Patient as Authenticated Patient
+    participant Router as routers/patient.py
+    participant Timeline as MedicationTimelineService
+    participant Repo as PatientRepository
+    participant DB as PostgreSQL 15+
+
+    Patient->>Router: GET /api/patient/medication-timeline
+    Router->>Timeline: get_patient_medication_timeline(patient_user_id)
+    Timeline->>Repo: get_patient_id_by_user_id(patient_user_id)
+    Repo-->>Timeline: patient_id
+
+    Note over Timeline,DB: Step 1: Backfill Legacy Prescriptions
+    Timeline->>Timeline: backfill_patient_current_medications(patient_id)
+    Timeline->>DB: INSERT INTO current_medication (if missing from historical rx)
+
+    Note over Timeline,DB: Step 2: Fetch Current Medications
+    Timeline->>DB: SELECT cm.*, pm.*, rx.*, m.* FROM current_medication cm ... WHERE cm.patient_id = %s
+    DB-->>Timeline: Raw Medication List
+
+    Note over Timeline: Step 3: Chronological Milestone Grouping
+    Timeline->>Timeline: Compute milestone_dates = sorted(distinct start_dates)
+    loop For Each Milestone Date
+        Timeline->>Timeline: Classify drugs: STARTED | CONTINUED | DISCONTINUED | COMPLETED
+        Timeline->>Timeline: Synthesize FlowchartLink(source_node -> target_node)
+    end
+
+    Note over Timeline: Step 4: Aggregate Active Regimen (Today)
+    Timeline->>Timeline: Filter active_now where status='ACTIVE' and end_date >= today
+
+    Timeline-->>Router: { patient_id, milestones, flowchart_links, active_now, summary }
+    Router-->>Patient: 200 OK (Timeline Graph Payload)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 6: Module 5 Clinical Appointments & Scheduling -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <div>
+        <h2 class="text-xl font-bold text-emerald-300 font-serif">
+          6. Module 5: Clinical Appointments & Consultation Scheduling
+        </h2>
+        <p class="text-xs text-emerald-200/60 mt-0.5">
+          Smart Slot Preference Scoring, Fallback Recommendations & Concurrency-Safe Row Locking
+        </p>
+      </div>
+      <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        COMPLETED & ACTIVE
+      </span>
+    </div>
+
+    <!-- Package Structure Cards -->
+    <div class="bg-black/40 rounded-2xl p-4 border border-emerald-500/15 font-mono text-xs text-emerald-300">
+      <div class="text-emerald-400 font-bold mb-2">// Package: services/appointments/</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>├── domain.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# TimePeriod, AppointmentStatus, AppointmentSlot</div>
+        <div>├── slot_matcher.py &nbsp;&nbsp;&nbsp;&nbsp;# SmartSlotMatcher (Time windows & scoring)</div>
+        <div>├── repository.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# AppointmentRepository (SQL & FOR UPDATE locks)</div>
+        <div>├── appointment_service.py # AppointmentBookingService (Orchestrator)</div>
+        <div>└── __init__.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Package exports & singletons</div>
+      </div>
+    </div>
+
+    <!-- Diagram 6.1: Matching Flow -->
+    <div class="space-y-3 pt-2">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 6.1 — Smart Slot Matching & Fallback Scoring Pipeline
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+flowchart TD
+    classDef input fill:#0F291E,stroke:#34D399,stroke-width:2px,color:#ECFDF5
+    classDef engine fill:#065F46,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef match fill:#047857,stroke:#A7F3D0,stroke-width:2px,color:#FFFFFF
+    classDef fallback fill:#450A0A,stroke:#F87171,stroke-width:1.5px,color:#FEE2E2
+
+    REQ["Patient Request<br/>(Doctor ID, Preferred Date, Time Period)"]:::input --> FETCH["AppointmentRepository<br/>Fetch Open Slots >= from_date with remaining_capacity > 0"]:::engine
+    
+    FETCH --> MATCHER["SmartSlotMatcher<br/>Evaluate start_time against Period Window"]:::engine
+
+    MATCHER --> COND{"Preferred Slots<br/>Found?"}:::engine
+
+    COND -->|Yes| RES1["Return Preferred Slots<br/>(suggested: False) + Top 3 Fallbacks"]:::match
+    COND -->|No| RES2["Return Nearest Available Slots<br/>(suggested: True Fallback)"]:::fallback
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagram 6.2: Booking Concurrency Sequence -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 6.2 — Race-Free Appointment Booking Sequence
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Patient as Authenticated Patient
+    participant Router as routers/patient.py
+    participant Service as AppointmentBookingService
+    participant Matcher as SmartSlotMatcher
+    participant Repo as AppointmentRepository
+    participant DB as PostgreSQL 15+
+
+    Patient->>Router: POST /api/patient/appointments (doctor_id, preferences)
+    Router->>Service: book_appointment(user_id, doctor_id, slot_id, date, period)
+    
+    Note over Service,DB: Concurrency Guard (ACID Isolation)
+    Service->>DB: BEGIN TRANSACTION
+    Service->>DB: SELECT * FROM appointment_slot WHERE slot_id = %s FOR UPDATE
+    DB-->>Service: Locked Slot Row (max_patients)
+
+    Service->>DB: SELECT COUNT(*) FROM appointment WHERE slot_id = %s AND status NOT IN ('CANCELLED', 'NO_SHOW')
+    DB-->>Service: booked_count
+
+    alt Capacity Exceeded (booked_count >= max_patients)
+        Service-->>Router: Raises ValueError ("Slot fully booked")
+        Router-->>Patient: 400 Bad Request
+    else Capacity Available
+        Service->>DB: SELECT 1 FROM appointment WHERE patient_id = %s AND slot_id = %s
+        alt Duplicate Active Booking
+            Service-->>Router: Raises ValueError ("Already booked")
+            Router-->>Patient: 400 Bad Request
+        else Valid Booking
+            Service->>DB: INSERT INTO appointment (patient_id, doctor_id, slot_id, status='BOOKED')
+            Service->>DB: COMMIT TRANSACTION
+            Service-->>Router: Appointment Confirmation Record
+            Router-->>Patient: 201 Created { appointment_id, status: 'BOOKED', slot_matched: true }
+        end
+    end
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 7: Module 6 -->
+  <section class="glass-card rounded-3xl p-6 lg:p-8 space-y-6">
+    <div class="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+      <h2 class="text-xl font-bold text-emerald-300 font-serif">
+        7. Module 6: Doctor Practice & Hospital Enterprise Operations
+      </h2>
+      <span class="px-2.5 py-1 text-xs font-mono rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        services/clinical_ops/
+      </span>
+    </div>
+
+    <p class="text-sm text-emerald-100/80 leading-relaxed">
+      Unifies multi-tenant institutional hospital governance with independent clinician workflows: doctor rosters, public patient code EHR lookups, immutable HIPAA-compliant access auditing, and clinical slot allocations.
+    </p>
+
+    <!-- Flowchart -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 7.1 — Affiliated Clinician Roster & Federated Patient EHR Ingress
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+flowchart TD
+    classDef client fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#ECFDF5
+    classDef facade fill:#065F46,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF
+    classDef service fill:#047857,stroke:#A7F3D0,stroke-width:1.5px,color:#FFFFFF
+    classDef db fill:#022C22,stroke:#059669,stroke-width:2px,color:#6EE7B7
+    classDef audit fill:#78350F,stroke:#FBBF24,stroke-width:1.5px,color:#FEF3C7
+
+    subgraph CLIENTS["Clinical Clients Layer"]
+        DOC["Doctor Practice Portal"]:::client
+        HOSP["Hospital Enterprise Admin"]:::client
+    end
+
+    subgraph ROUTERS["API Routing Layer"]
+        R_DOC["routers/doctor.py<br/>/api/doctor/*"]:::service
+        R_HOSP["routers/hospital.py<br/>/api/hospital/*"]:::service
+    end
+
+    subgraph SERVICES["OOP Clinical Operations Services"]
+        DS["DoctorPracticeService<br/>Caseload Scoping & Triage"]:::facade
+        HS["HospitalEnterpriseService<br/>EHR Ingress & Affiliation"]:::facade
+        REPO["ClinicalOpsRepository<br/>Parameterized SQL Engine"]:::service
+    end
+
+    subgraph STORAGE["Persistence & Audit Storage"]
+        PG[("PostgreSQL 15+<br/>hospital | doctor | hospital_doctor<br/>patient | prescription | appointment_slot")]:::db
+        AUDIT[("Audit Ledger<br/>audit_log (HIPAA Compliant)")]:::audit
+    end
+
+    DOC --> R_DOC
+    HOSP --> R_HOSP
+
+    R_DOC --> DS
+    R_HOSP --> HS
+
+    DS --> REPO
+    HS --> REPO
+
+    REPO -->|Query / Upsert| PG
+    HS -->|Record Data Access Event| AUDIT
+        </div>
+      </div>
+    </div>
+
+    <!-- Sequence Diagram -->
+    <div class="space-y-3 pt-4">
+      <h3 class="text-sm font-bold text-emerald-200 uppercase tracking-wider font-mono">
+        Figure 7.2 — Hospital-Mediated Patient Booking & Audit Lifecycle
+      </h3>
+      <div class="bg-black/50 p-4 rounded-2xl border border-emerald-500/20 overflow-x-auto">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Admin as Hospital Admin
+    participant Router as routers/hospital.py
+    participant Service as HospitalEnterpriseService
+    participant Repo as ClinicalOpsRepository
+    participant DB as PostgreSQL 15+
+    participant Audit as Audit Log Ledger
+
+    Note over Admin,Router: Step 1: Institutional Booking Request
+    Admin->>Router: POST /api/hospital/book-appointment (code, doctor_id, slot_id)
+    Router->>Service: book_appointment_for_patient(hospital_id, code, doctor_id, slot_id)
+
+    Note over Service,DB: Step 2: Validation & Affiliation Guard
+    Service->>Repo: book_appointment_for_patient(...)
+    Repo->>DB: SELECT patient_id FROM patient WHERE patient_code = %s
+    DB-->>Repo: patient_id
+    Repo->>DB: SELECT 1 FROM hospital_doctor WHERE hospital_id = %s AND doctor_id = %s AND is_active = TRUE
+    DB-->>Repo: Affiliation Confirmed
+
+    Note over Service,DB: Step 3: Slot Capacity Verification
+    Repo->>DB: SELECT slot_id, max_patients, booked_count FROM appointment_slot ...
+    DB-->>Repo: slot_details (booked_count < max_patients)
+
+    Note over Service,DB: Step 4: Appointment Creation
+    Repo->>DB: INSERT INTO appointment (patient_id, doctor_id, clinic_id, slot_id, status='BOOKED')
+    DB-->>Repo: appointment record
+
+    Note over Service,Audit: Step 5: HIPAA Audit Logging
+    Repo->>Audit: INSERT INTO audit_log (hospital_id, action='BOOK_APPOINTMENT', entity_type='APPOINTMENT', entity_id)
+    Audit-->>Repo: Confirmed
+    Repo-->>Service: appointment dict
+    Service-->>Router: appointment response
+    Router-->>Admin: 201 Created { appointment_id, status: 'BOOKED', patient_id }
+        </div>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
+

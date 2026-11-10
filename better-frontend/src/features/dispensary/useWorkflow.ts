@@ -42,11 +42,12 @@ export function useWorkflow() {
       } else if (action.type === 'VERIFY_OTP') {
         await verifyPickupCommand(rxId, action.otp);
       } else if (action.type === 'COMPLETE_DISPENSE') {
-        await dispenseRequestCommand(rxId, state.verificationOtp);
+        const pickupCode = state.verificationOtp || state.prescription?.pickupCode || '';
+        await dispenseRequestCommand(rxId, pickupCode);
       } else if (action.type === 'FORCE_PARTIAL_RESERVE') {
         await updateItemDecisionCommand(rxId, 'all', 'PARTIAL');
       } else if (action.type === 'SUBSTITUTE_UNAVAILABLE') {
-        await updateItemDecisionCommand(rxId, action.medicineId, 'SUBSTITUTE', undefined, action.substituteName);
+        await updateItemDecisionCommand(rxId, action.medicineId, 'SUBSTITUTE', undefined, undefined, action.substituteName);
       }
       return action;
     },
@@ -62,7 +63,7 @@ export function useWorkflow() {
   const handleStepClick = React.useCallback(
     (stepIndex: number) => {
       const rx = state.prescription;
-      if (!rx?.id) return;
+      if (!rx?.id || rx.status === 'CANCELLED' || rx.status === 'DISPENSED') return;
 
       if (stepIndex === 0) {
         if (state.stage === 'NEW' || rx.status === 'PENDING') {
@@ -104,6 +105,11 @@ export function useWorkflow() {
     state,
     dispatch,
     handleStepClick,
+    handleVerifyOtp: (otp: string) => stepMutation.mutate({ type: 'VERIFY_OTP', otp }),
+    handleProcessRequest: () => stepMutation.mutate({ type: 'PROCESS_REQUEST' }),
+    handleMarkReady: () => stepMutation.mutate({ type: 'MARK_READY' }),
+    handleCompleteDispense: () => stepMutation.mutate({ type: 'COMPLETE_DISPENSE' }),
+    openVerifyDialog: () => dispatch({ type: 'OPEN_VERIFY_PICKUP' }),
     triggerActiveStep: () => handleStepClick(state.activeStepIndex),
     isPending: stepMutation.isPending,
   };

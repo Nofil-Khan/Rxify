@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import PrescriptionHeaderRow from './PrescriptionHeaderRow';
 import DiagnosisNotesRow from './DiagnosisNotesRow';
 import MedicineRow from './MedicineRow';
+import PrescriptionWorkflowSection from './PrescriptionWorkflowSection';
 import { useDispensaryWorkspace } from '../hooks/useDispensaryWorkspace';
 
 export const PrescriptionCard: React.FC = () => {
@@ -34,7 +35,7 @@ export const PrescriptionCard: React.FC = () => {
   return (
     <section
       data-testid="slot-prescription-card"
-      className="cream-card relative flex h-full min-w-0 flex-col p-7 justify-between overflow-hidden shadow-2xl rounded-[36px]"
+      className="cream-card relative flex h-full min-w-0 flex-col p-6 lg:p-7 justify-between overflow-hidden shadow-2xl rounded-[36px]"
       aria-label={`Prescription Details for ${prescription.patientName}`}
     >
       <AnimatePresence mode="wait">
@@ -47,7 +48,7 @@ export const PrescriptionCard: React.FC = () => {
           className="flex flex-col gap-3.5 h-full justify-between"
         >
           {/* Top segment: Header, Diagnosis & Notes */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             <PrescriptionHeaderRow
               prescription={prescription}
               onViewPrescription={openViewPrescriptionModal}
@@ -66,12 +67,12 @@ export const PrescriptionCard: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom segment: Prescribed Medicines List */}
+          {/* Bottom segment: Prescribed Medicines List with Workflow Actions at the bottom */}
           <div
-            className="flex flex-col gap-3 overflow-y-auto max-h-[350px] pr-1"
+            className="flex flex-col gap-3 overflow-y-auto max-h-[380px] lg:max-h-[420px] pr-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-light rounded-2xl"
             tabIndex={0}
             role="region"
-            aria-label="Prescribed medicines list"
+            aria-label="Prescribed medicines list and fulfillment actions"
           >
             {prescription.medicines.map((med) => (
               <MedicineRow
@@ -80,6 +81,9 @@ export const PrescriptionCard: React.FC = () => {
                 isSelected={med.id === selectedMedicineId}
               />
             ))}
+
+            {/* Workflow actions at the end of the scrollable medicine list */}
+            <PrescriptionWorkflowSection prescription={prescription} />
           </div>
         </motion.div>
       </AnimatePresence>

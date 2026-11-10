@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import Lenis from 'lenis';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -8,18 +8,34 @@ import {
   createRouter,
   createRoute,
   createRootRoute,
+  useNavigate,
 } from '@tanstack/react-router';
-import { BrowserRouter } from 'react-router-dom';
-import Landing from './pages/Landing';
-import Auth from './pages/Auth';
-import PatientDashboard from './pages/patient/PatientDashboard';
-import DoctorDashboard from './pages/doctor/DoctorDashboard';
-import HospitalAuth from './pages/hospital/HospitalAuth';
-import HospitalDashboard from './pages/hospital/HospitalDashboard';
-import DispensaryAuth from './pages/dispensary/DispensaryAuth';
-import Workspace from './pages/Workspace';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const Auth = lazy(() => import('./pages/Auth'));
+const PatientDashboard = lazy(() => import('./pages/patient/PatientDashboard'));
+const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard'));
+const HospitalAuth = lazy(() => import('./pages/hospital/HospitalAuth'));
+const HospitalDashboard = lazy(() => import('./pages/hospital/HospitalDashboard'));
+const DispensaryAuth = lazy(() => import('./pages/dispensary/DispensaryAuth'));
+const Workspace = lazy(() => import('./pages/Workspace'));
 
 gsap.registerPlugin(ScrollTrigger);
+
+function RouteLoading() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="min-h-screen w-full flex items-center justify-center bg-bg-0 text-mint-300"
+    >
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 rounded-full border-2 border-mint-400/30 border-t-mint-400 animate-spin" />
+        <span className="text-xs font-mono tracking-wider text-mint-300/80">Loading workspace...</span>
+      </div>
+    </div>
+  );
+}
 
 function LandingWithLenis() {
   const lenisRef = useRef<Lenis | null>(null);
@@ -48,12 +64,28 @@ function LandingWithLenis() {
   return <Landing />;
 }
 
-const rootRoute = createRootRoute({
-  component: () => (
-    <BrowserRouter>
+function RootComponent() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('rxify_token');
+      localStorage.removeItem('rxify_hospital_token');
+      navigate({ to: '/login' });
+    };
+    window.addEventListener('rxify-auth-unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('rxify-auth-unauthorized', handleUnauthorized);
+  }, [navigate]);
+
+  return (
+    <Suspense fallback={<RouteLoading />}>
       <Outlet />
-    </BrowserRouter>
-  ),
+    </Suspense>
+  );
+}
+
+const rootRoute = createRootRoute({
+  component: RootComponent,
 });
 
 const indexRoute = createRoute({
@@ -134,6 +166,12 @@ const analyticsRoute = createRoute({
   component: Workspace,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: Workspace,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -148,6 +186,7 @@ const routeTree = rootRoute.addChildren([
   inventoryRoute,
   ordersRoute,
   analyticsRoute,
+  settingsRoute,
 ]);
 
 const router = createRouter({ routeTree });

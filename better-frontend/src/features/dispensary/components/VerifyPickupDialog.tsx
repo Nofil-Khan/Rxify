@@ -15,7 +15,9 @@ interface VerifyPickupDialogProps {
   expectedOtp: string;
   errorMessage: string | null;
   onClose: () => void;
-  onVerify: (otp: string) => void;
+  onVerify?: (otp: string) => void;
+  onSubmit?: (otp: string) => void;
+  isSubmitting?: boolean;
 }
 
 export const VerifyPickupDialog: React.FC<VerifyPickupDialogProps> = ({
@@ -25,14 +27,25 @@ export const VerifyPickupDialog: React.FC<VerifyPickupDialogProps> = ({
   errorMessage,
   onClose,
   onVerify,
+  onSubmit,
+  isSubmitting,
 }) => {
-  const [inputOtp, setInputOtp] = React.useState(expectedOtp);
+  const effectiveOtp = prescription?.pickupCode || expectedOtp || '';
+  const [inputOtp, setInputOtp] = React.useState('');
 
   React.useEffect(() => {
-    if (open) setInputOtp(expectedOtp);
-  }, [open, expectedOtp]);
+    if (open) setInputOtp('');
+  }, [open]);
 
-  const qrPayload = `${prescription?.rxNumber || ''}:${expectedOtp}:${prescription?.patientName || ''}`;
+  const handleConfirm = () => {
+    if (onSubmit) {
+      onSubmit(inputOtp);
+    } else if (onVerify) {
+      onVerify(inputOtp);
+    }
+  };
+
+  const qrPayload = `${prescription?.rxNumber || ''}:${effectiveOtp}:${prescription?.patientName || ''}`;
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
@@ -74,10 +87,6 @@ export const VerifyPickupDialog: React.FC<VerifyPickupDialogProps> = ({
             {errorMessage && (
               <p className="text-xs text-red-400 font-medium">{errorMessage}</p>
             )}
-
-            <p className="text-[10px] text-emerald-200/40">
-              Demo Test Handover OTP Code: <span className="font-mono text-mint-300 font-bold">{expectedOtp}</span>
-            </p>
           </div>
 
           <div className="flex w-full items-center justify-between border-t border-mint-400/15 pt-3">
@@ -88,11 +97,12 @@ export const VerifyPickupDialog: React.FC<VerifyPickupDialogProps> = ({
 
             <button
               type="button"
-              onClick={() => onVerify(inputOtp)}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-mint-400 px-5 py-2 text-xs font-bold text-bg-0 shadow-glow-mint hover:opacity-95 focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
+              disabled={isSubmitting}
+              onClick={handleConfirm}
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-mint-400 px-5 py-2 text-xs font-bold text-bg-0 shadow-glow-mint hover:opacity-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-mint-400 focus-visible:outline-none cursor-pointer"
             >
               <Check className="h-4 w-4" />
-              <span>Confirm Handover</span>
+              <span>{isSubmitting ? 'Verifying...' : 'Confirm Handover'}</span>
             </button>
           </div>
         </div>

@@ -66,8 +66,9 @@ export default function UploadTab() {
         }
       }, 1500);
 
-    } catch (e: any) {
-      setErrMsg(e?.message ?? 'Upload failed. Please try again.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Upload failed. Please try again.';
+      setErrMsg(msg);
       setState('error');
     }
   }, []);
@@ -132,7 +133,14 @@ export default function UploadTab() {
 
             {preview ? (
               <div className="pd-preview-wrap">
-                <img src={preview} alt="Selected prescription preview" className="pd-preview-img" />
+                <img
+                  src={preview}
+                  alt="Selected prescription preview"
+                  className="pd-preview-img"
+                  width={400}
+                  height={300}
+                  loading="lazy"
+                />
                 <button
                   id="clear-file-btn"
                   className="pd-clear-btn"

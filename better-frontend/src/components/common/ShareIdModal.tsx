@@ -88,8 +88,9 @@ export default function ShareIdModal({
     try {
       const res = await createShareToken(shareLabel.trim() || 'Medical Record Share', shareExpiry);
       setGeneratedToken(res.token.token);
-    } catch (err: any) {
-      setTokenError(err?.message ?? 'Failed to create share token.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create share token.';
+      setTokenError(msg);
     } finally {
       setTokenLoading(false);
     }

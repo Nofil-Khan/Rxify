@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 import psycopg2.extras
 from database.db import get_conn
 from core.security import get_current_user
-from services.medicine_matcher import resolve_medicine, resolve_prescription_medications
+from services.clinical import default_matcher_service
 
 router = APIRouter(prefix="/api/medicine", tags=["medicine"])
 
@@ -50,15 +50,13 @@ def resolve_single(
     body: ResolveMedicineRequest,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Resolve a single extracted medicine name to a catalog entry.
-
-    Returns one of: MATCHED, AMBIGUOUS, UNRESOLVED, NOT_A_MEDICINE.
-    """
-    return resolve_medicine(
+    """Resolve a single extracted medicine name to a catalog entry."""
+    result = default_matcher_service.resolve(
         raw_name=body.raw_name,
         extracted_dosage=body.dosage,
         extracted_form=body.form,
     )
+    return result.to_dict()
 
 
 @router.post("/resolve-batch")
@@ -66,12 +64,9 @@ def resolve_batch(
     body: ResolveBatchRequest,
     current_user: dict = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
-    """Resolve a list of extracted medications (e.g. from a full prescription).
-
-    Returns the same list with a ``match`` key added to each item.
-    """
+    """Resolve a list of extracted medications (e.g. from a full prescription)."""
     meds = [m.model_dump() for m in body.medications]
-    return resolve_prescription_medications(meds)
+    return default_matcher_service.resolve_batch(meds)
 
 
 @router.get("/search")

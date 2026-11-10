@@ -71,6 +71,7 @@ export type RequestStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | '
 
 export interface WorkspaceMedicine {
   id: string;
+  medicineId?: number;
   name: string;
   strength: string;
   form: 'Capsule' | 'Tablet' | 'Syrup' | 'Inhaler' | 'Cup' | 'Injection';
@@ -87,6 +88,19 @@ export interface WorkspaceMedicine {
   expiryDate?: string;
   reconsultationNotes?: string;
   suggestedSubstitute?: string;
+  picked?: boolean;
+  saltComposition?: string;
+  rackLocation?: string;
+  coldChain?: boolean;
+  isSubstituted?: boolean;
+  originalName?: string;
+  substituteAlternative?: {
+    name: string;
+    form: string;
+    rack: string;
+    inStock: number;
+    salt: string;
+  };
 }
 
 export interface WorkspacePrescription {
@@ -107,6 +121,12 @@ export interface WorkspacePrescription {
   priority?: 'NORMAL' | 'URGENT';
   medicines: WorkspaceMedicine[];
   hasAlert?: boolean;
+  pickupCode?: string;
+  allergyAlert?: string;
+  doctorRegNo?: string;
+  bloodGroup?: string;
+  isOnHold?: boolean;
+  holdReason?: string;
 }
 
 export interface PipelineStats {
